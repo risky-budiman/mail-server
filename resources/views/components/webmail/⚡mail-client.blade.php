@@ -181,9 +181,12 @@ new class extends Component
             })->toArray();
         }
 
-        // Tandai email default yang sedang terpilih sebagai terbaca (is_read = true)
-        if ($this->selectedEmailId) {
-            $this->selectEmail($this->selectedEmailId);
+        // Pastikan email aktif selalu terisi dari email pertama pada folder aktif
+        $firstMail = collect($this->emails)->where('folder', $this->activeFolder)->first();
+        if ($firstMail) {
+            $this->selectEmail($firstMail['id']);
+        } elseif (!empty($this->emails)) {
+            $this->selectEmail($this->emails[0]['id']);
         }
 
         // Sinkronkan kapasitas storage agar sesuai dengan data aktual email di akun ini
@@ -1301,7 +1304,10 @@ new class extends Component
                 </div>
             </div>
             @endif
-     <!-- Modal Tulis Pesan (Compose) Lengkap dengan CC/BCC -->
+        </div>
+    </div>
+
+    <!-- Modal Tulis Pesan (Compose) Lengkap dengan CC/BCC -->
     @if($showComposeModal)
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
         <div class="w-full max-w-2xl bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl">
