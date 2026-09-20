@@ -671,133 +671,162 @@ new class extends Component
 };
 ?>
 
-<div class="h-[calc(100vh-6.5rem)] md:h-[calc(100vh-8rem)] flex flex-col rounded-2xl bg-slate-900/80 border border-slate-800 overflow-hidden shadow-2xl"
+<div class="h-[calc(100vh-6rem)] md:h-[calc(100vh-7rem)] flex flex-col rounded-2xl bg-slate-900/90 border border-slate-800/90 overflow-hidden shadow-2xl backdrop-blur-xl"
      x-data="{ showFolderSidebar: false, mobileEmailOpen: false }">
     
     <!-- Top Action Toolbar -->
-    <div class="min-h-14 px-4 py-2 border-b border-slate-800 bg-slate-900 flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <div class="min-h-14 px-4 py-2.5 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div class="flex items-center gap-2 sm:gap-3">
             <!-- Mobile Toggle Folder Button -->
-            <button @click="showFolderSidebar = !showFolderSidebar" class="md:hidden p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white" title="Pilih Folder">
+            <button @click="showFolderSidebar = !showFolderSidebar" class="md:hidden p-2 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700/60" title="Pilih Folder">
                 <i data-lucide="folder" class="w-4 h-4"></i>
             </button>
 
+            <!-- Tulis Pesan Button with Gradient Glow -->
             <button wire:click="$set('showComposeModal', true)" 
-                    class="px-3 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30">
+                    class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]">
                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                 <span>Tulis Pesan</span>
             </button>
+
             <div class="hidden sm:block h-5 w-px bg-slate-800"></div>
-            <div class="text-xs text-slate-300 font-medium flex items-center gap-1.5 truncate max-w-[180px] sm:max-w-none">
-                <span class="text-slate-500 hidden sm:inline">Akun:</span>
-                <span class="font-mono text-indigo-300 truncate text-[11px] sm:text-xs">{{ $currentAccount->email ?? 'admin@perusahaan.net.id' }}</span>
+
+            <!-- Active Folder Indicator Badge -->
+            <div class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 font-medium">
+                <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : 'folder')))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <span class="text-slate-400">Folder:</span>
+                <span class="font-bold text-white capitalize">
+                    {{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}
+                </span>
             </div>
         </div>
 
         @if (session()->has('webmail_msg'))
-            <div class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-1.5 animate-pulse">
-                <i data-lucide="check" class="w-3.5 h-3.5"></i>
-                {{ session('webmail_msg') }}
+            <div class="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 shadow-sm animate-pulse">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+                <span>{{ session('webmail_msg') }}</span>
             </div>
         @endif
 
         <div class="flex items-center gap-3">
-            <div class="hidden sm:flex items-center gap-2">
-                <span class="text-[11px] text-slate-400 flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Dovecot IMAP Ready
+            <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 shadow-inner">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
+                <span class="font-medium text-slate-300">Dovecot IMAP Active</span>
             </div>
         </div>
     </div>
 
     <!-- 3-Column Webmail Layout -->
     <div class="flex-1 flex overflow-hidden relative">
-        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, 190px on Desktop) -->
+        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, 210px on Desktop) -->
         <div :class="showFolderSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-             class="absolute md:static inset-y-0 left-0 w-52 bg-slate-950/95 md:bg-slate-950/50 border-r border-slate-800 p-3 flex flex-col justify-between shrink-0 z-20 transition-transform duration-150 ease-in-out">
-            <div class="space-y-1">
-                <div class="flex items-center justify-between md:hidden pb-2 mb-1 border-b border-slate-800">
-                    <span class="text-xs font-bold text-slate-300">Folders</span>
-                    <button @click="showFolderSidebar = false" class="text-slate-400 hover:text-white">
+             class="absolute md:static inset-y-0 left-0 w-56 bg-slate-950/95 md:bg-slate-950/60 backdrop-blur-xl border-r border-slate-800/80 p-3.5 flex flex-col justify-between shrink-0 z-20 transition-transform duration-200 ease-in-out">
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between md:hidden pb-2 mb-2 border-b border-slate-800">
+                    <span class="text-xs font-bold text-slate-300">Navigasi Folder</span>
+                    <button @click="showFolderSidebar = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
 
+                <!-- Inbox -->
                 <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ $activeFolder === 'inbox' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white' }}">
+                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
-                        <i data-lucide="inbox" class="w-4 h-4"></i>
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
+                            <i data-lucide="inbox" class="w-3.5 h-3.5"></i>
+                        </div>
                         <span>Kotak Masuk</span>
                     </div>
                     @if($counts['inbox'] > 0)
-                        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500/30 text-white font-bold">{{ $counts['inbox'] }}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' }} font-bold">
+                            {{ $counts['inbox'] }}
+                        </span>
                     @endif
                 </button>
 
+                <!-- Sent -->
                 <button wire:click="selectFolder('sent')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ $activeFolder === 'sent' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white' }}">
+                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
-                        <i data-lucide="send" class="w-4 h-4"></i>
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'sent' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-indigo-400' }}">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                        </div>
                         <span>Terkirim</span>
                     </div>
                 </button>
 
+                <!-- Drafts -->
                 <button wire:click="selectFolder('drafts')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ $activeFolder === 'drafts' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white' }}">
+                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
-                        <i data-lucide="file-text" class="w-4 h-4"></i>
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'drafts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-rose-400' }}">
+                            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                        </div>
                         <span>Drafts</span>
                     </div>
                     @if($counts['drafts'] > 0)
-                        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">{{ $counts['drafts'] }}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'drafts' ? 'bg-white/20 text-white' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30' }} font-bold">
+                            {{ $counts['drafts'] }}
+                        </span>
                     @endif
                 </button>
 
-                <!-- Folder Spam (Kumpulan Spam) -->
+                <!-- Folder Spam -->
                 <button wire:click="selectFolder('spam')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ $activeFolder === 'spam' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white' }}">
+                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
-                        <i data-lucide="alert-octagon" class="w-4 h-4 text-amber-400"></i>
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'spam' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-amber-400' }}">
+                            <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
+                        </div>
                         <span>Spam</span>
                     </div>
                     @if($counts['spam'] > 0)
-                        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">{{ $counts['spam'] }}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'spam' ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30' }} font-bold">
+                            {{ $counts['spam'] }}
+                        </span>
                     @endif
                 </button>
 
+                <!-- Trash -->
                 <button wire:click="selectFolder('trash')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ $activeFolder === 'trash' ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:bg-slate-800 hover:text-white' }}">
+                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
-                        <i data-lucide="trash" class="w-4 h-4"></i>
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'trash' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-slate-400' }}">
+                            <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                        </div>
                         <span>Sampah</span>
                     </div>
                 </button>
 
-                <!-- Kumpulan Folder Kustom (Gaya Hostinger Webmail) -->
-                <div class="pt-3 border-t border-slate-800/80">
-                    <div class="flex items-center justify-between px-2 mb-1.5">
+                <!-- Kumpulan Folder Kustom -->
+                <div class="pt-4 mt-3 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between px-2 mb-2">
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Folder Kustom</span>
                         <button @click="$wire.set('showCreateFolderModal', true)" 
-                                class="p-1 rounded hover:bg-slate-800 text-indigo-400 hover:text-white transition-colors" 
+                                class="p-1 rounded-lg hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 transition-colors" 
                                 title="Buat Folder Baru">
                             <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
 
-                    <div class="space-y-0.5">
+                    <div class="space-y-1">
                         @foreach($customFolders as $folder)
-                        <div class="group relative flex items-center justify-between rounded-lg transition-all {{ $activeFolder === $folder ? 'bg-indigo-600 text-white font-semibold' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white' }}">
+                        <div class="group relative flex items-center justify-between rounded-xl transition-all {{ $activeFolder === $folder ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-white' }}">
                             <button wire:click="selectFolder('{{ $folder }}')" @click="showFolderSidebar = false"
-                                    class="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium truncate text-left">
-                                <i data-lucide="folder" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i>
+                                    class="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium truncate text-left">
+                                <i data-lucide="folder" class="w-3.5 h-3.5 {{ $activeFolder === $folder ? 'text-white' : 'text-cyan-400' }} shrink-0"></i>
                                 <span class="truncate">{{ $folder }}</span>
                             </button>
                             
-                            <!-- Tombol Hapus Folder (Muncul saat hover di baris folder) -->
+                            <!-- Tombol Hapus Folder -->
                             <button type="button" 
                                     wire:click="deleteFolder('{{ $folder }}')" 
                                     wire:confirm="Yakin ingin menghapus folder '{{ $folder }}'? Email di dalamnya akan dipindahkan ke Kotak Masuk."
-                                    class="opacity-0 group-hover:opacity-100 p-1.5 mr-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0" 
+                                    class="opacity-0 group-hover:opacity-100 p-1.5 mr-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0" 
                                     title="Hapus folder {{ $folder }}">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
@@ -812,25 +841,27 @@ new class extends Component
                 $usedFormatted = $currentAccount ? $currentAccount->formatted_used : '1.16 GB';
                 $quotaFormatted = $currentAccount ? $currentAccount->formatted_quota : '5 GB';
                 $usagePercent = $currentAccount ? $currentAccount->quota_usage_percent : 23;
-                $barColor = $usagePercent >= 90 ? 'bg-rose-500' : ($usagePercent >= 75 ? 'bg-amber-500' : 'bg-indigo-500');
+                $barColor = $usagePercent >= 90 ? 'from-rose-500 to-red-600' : ($usagePercent >= 75 ? 'from-amber-400 to-orange-500' : 'from-cyan-400 to-indigo-500');
             @endphp
-            <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400 space-y-1.5" title="Kapasitas penyimpanan akun {{ $currentAccount->email ?? '' }}">
+            <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-2 shadow-inner" title="Kapasitas penyimpanan akun {{ $currentAccount->email ?? '' }}">
                 <div class="flex justify-between font-medium">
                     <span class="flex items-center gap-1.5">
-                        <i data-lucide="hard-drive" class="w-3 h-3 text-slate-500"></i>
-                        <span>Storage</span>
+                        <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-cyan-400"></i>
+                        <span class="text-slate-300 font-semibold">Penyimpanan</span>
                     </span>
-                    <span class="text-slate-300 font-mono">{{ $usedFormatted }} / {{ $quotaFormatted }}</span>
+                    <span class="text-slate-400 font-mono text-[10px]">{{ $usedFormatted }} / {{ $quotaFormatted }}</span>
                 </div>
-                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div class="h-full {{ $barColor }} rounded-full transition-all duration-300" style="width: {{ $usagePercent }}%"></div>
+                <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                    <div class="h-full bg-gradient-to-r {{ $barColor }} rounded-full transition-all duration-500" style="width: {{ $usagePercent }}%"></div>
                 </div>
                 <div class="flex justify-between text-[10px] text-slate-500 pt-0.5">
                     <span>Terpakai {{ $usagePercent }}%</span>
                     @if($usagePercent >= 90)
-                        <span class="text-rose-400 font-semibold flex items-center gap-0.5">
+                        <span class="text-rose-400 font-bold flex items-center gap-0.5">
                             <i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> Hampir Penuh
                         </span>
+                    @else
+                        <span class="text-emerald-400 font-medium">Tersedia {{ 100 - $usagePercent }}%</span>
                     @endif
                 </div>
             </div>
@@ -838,32 +869,34 @@ new class extends Component
 
         <!-- Kolom 2: Daftar Email Masuk + Search & Filter Bar -->
         <div :class="mobileEmailOpen ? 'hidden md:flex' : 'flex'"
-             class="w-full md:w-80 border-r border-slate-800 bg-slate-900/40 flex-col shrink-0 overflow-hidden">
+             class="w-full md:w-88 lg:w-96 border-r border-slate-800/80 bg-slate-950/40 flex-col shrink-0 overflow-hidden">
             
             <!-- Search & Quick Filter Bar -->
-            <div class="p-2.5 border-b border-slate-800 bg-slate-900/80 space-y-2 shrink-0">
+            <div class="p-3 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md space-y-2.5 shrink-0">
                 <div class="relative">
-                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500"></i>
-                    <input type="text" wire:model.live.debounce.200ms="searchQuery" placeholder="Cari email..." 
-                           class="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-sans">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-2.5 text-slate-400"></i>
+                    <input type="text" wire:model.live.debounce.200ms="searchQuery" placeholder="Cari pesan atau pengirim..." 
+                           class="w-full pl-9 pr-3.5 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-sans shadow-inner">
                 </div>
 
-                <div class="flex items-center justify-between text-[11px] px-1">
+                <div class="flex items-center justify-between text-[11px]">
                     <div class="flex items-center gap-1.5">
                         <button wire:click="$toggle('filterUnread')" 
-                                class="px-2 py-0.5 rounded text-[10px] font-semibold border transition-all {{ $filterUnread ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white' }}">
+                                class="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 {{ $filterUnread ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm' : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700' }}">
+                            <span class="w-1.5 h-1.5 rounded-full {{ $filterUnread ? 'bg-cyan-400' : 'bg-slate-500' }}"></span>
                             Belum Dibaca
                         </button>
                         <button wire:click="$toggle('filterStarred')" 
-                                class="px-2 py-0.5 rounded text-[10px] font-semibold border transition-all {{ $filterStarred ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white' }}">
-                            ★ Berbintang
+                                class="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 {{ $filterStarred ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm' : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700' }}">
+                            <i data-lucide="star" class="w-3 h-3 {{ $filterStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-500' }}"></i>
+                            Berbintang
                         </button>
                     </div>
-                    <span class="text-[10px] text-slate-500 font-mono">{{ count($filteredEmails) }} pesan</span>
+                    <span class="text-[10px] text-slate-500 font-mono font-medium">{{ count($filteredEmails) }} pesan</span>
                 </div>
 
                 @if($activeFolder === 'trash' && count($filteredEmails) > 0)
-                <div class="pt-1 border-t border-slate-800/80 flex items-center justify-between">
+                <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                     <span class="text-[10px] text-slate-400">Folder Sampah</span>
                     <button wire:click="emptyTrash" 
                             wire:confirm="Yakin ingin mengosongkan seluruh folder Sampah? Pesan tidak dapat dipulihkan kembali."
@@ -875,7 +908,7 @@ new class extends Component
                 @endif
 
                 @if($activeFolder === 'spam' && count($filteredEmails) > 0)
-                <div class="pt-1 border-t border-slate-800/80 flex items-center justify-between">
+                <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                     <span class="text-[10px] text-slate-400">Folder Spam</span>
                     <button wire:click="emptySpam" 
                             wire:confirm="Yakin ingin menghapus semua pesan spam sekarang? Pesan akan dihapus secara permanen."
@@ -888,74 +921,84 @@ new class extends Component
             </div>
 
             <!-- Email List Stream -->
-            <div class="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+            <div class="flex-1 overflow-y-auto divide-y divide-slate-800/50">
                 @forelse($filteredEmails as $email)
                 <div wire:click="selectEmail({{ $email['id'] }})" @click="mobileEmailOpen = true"
-                     class="p-3.5 cursor-pointer transition-all border-l-2 relative {{ $selectedEmailId == $email['id'] ? 'bg-indigo-950/40 border-indigo-500' : 'border-transparent hover:bg-slate-800/40' }}">
-                    <div class="flex items-center justify-between mb-1">
+                     class="p-3.5 cursor-pointer transition-all border-l-4 relative group {{ $selectedEmailId == $email['id'] ? 'bg-gradient-to-r from-indigo-950/60 to-slate-900/60 border-cyan-400 shadow-sm' : 'border-transparent hover:bg-slate-900/50' }}">
+                    <div class="flex items-center justify-between mb-1.5">
                         <div class="flex items-center gap-2 truncate pr-2">
                             @if(!$email['is_read'])
-                                <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 ring-2 ring-cyan-400/20" title="Belum Dibaca"></span>
+                                <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 ring-4 ring-cyan-400/20" title="Belum Dibaca"></span>
+                            @else
+                                <span class="w-2 h-2 rounded-full bg-slate-700/60 shrink-0"></span>
                             @endif
-                            <span class="text-xs truncate {{ $email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white' }}">
+                            <span class="text-xs truncate {{ $email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white tracking-tight' }}">
                                 {{ $email['from_name'] }}
                             </span>
                         </div>
-                        <span class="text-[10px] text-slate-500 shrink-0">{{ $email['date'] }}</span>
+                        <span class="text-[10px] text-slate-400 shrink-0 font-medium">{{ $email['date'] }}</span>
                     </div>
-                    <div class="text-xs truncate flex items-center gap-1.5 {{ $email['is_read'] ? 'font-normal text-slate-400' : 'font-semibold text-cyan-200' }}">
+
+                    <div class="text-xs truncate flex items-center gap-1.5 mb-1 {{ $email['is_read'] ? 'font-normal text-slate-300' : 'font-semibold text-cyan-200' }}">
                         @if($email['folder'] === 'drafts')
-                            <span class="text-[10px] font-bold text-rose-400">Draf</span>
-                            <span class="text-slate-600">•</span>
+                            <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">Draf</span>
+                        @endif
+                        @if($email['is_starred'])
+                            <i data-lucide="star" class="w-3 h-3 fill-amber-400 text-amber-400 shrink-0"></i>
                         @endif
                         <span class="truncate">{{ $email['subject'] }}</span>
                     </div>
-                    <div class="text-[11px] text-slate-500 truncate mt-1">
-                        {{ Str::limit($email['body'], 50) }}
+
+                    <div class="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                        {{ Str::limit($email['body'], 75) }}
                     </div>
                 </div>
                 @empty
-                <div class="p-8 text-center text-xs text-slate-500">
-                    Tidak ada email yang cocok dengan kriteria.
+                <div class="p-10 text-center space-y-2">
+                    <div class="w-10 h-10 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+                        <i data-lucide="mail-search" class="w-5 h-5"></i>
+                    </div>
+                    <p class="text-xs font-medium text-slate-400">Tidak ada pesan ditemukan</p>
+                    <p class="text-[11px] text-slate-500">Coba kata kunci lain atau pilih folder berbeda</p>
                 </div>
                 @endforelse
             </div>
         </div>
 
-        <!-- Kolom 3: Viewer Isi Email (Full width on mobile detail, flex-1 on desktop) -->
+        <!-- Kolom 3: Viewer Isi Email -->
         <div :class="mobileEmailOpen ? 'flex' : 'hidden md:flex'"
              class="flex-1 bg-slate-950 flex flex-col min-w-0 h-full overflow-hidden"
              x-data="{ showInlineReply: false }"
              wire:key="email-view-{{ $selectedEmailId }}">
             @if($selectedEmail)
             <!-- Mobile Back to List Button -->
-            <div class="md:hidden px-4 py-2.5 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between shrink-0">
-                <button @click="mobileEmailOpen = false" class="flex items-center gap-1.5 text-xs text-indigo-400 font-semibold">
+            <div class="md:hidden px-4 py-3 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
+                <button @click="mobileEmailOpen = false" class="flex items-center gap-1.5 text-xs text-cyan-400 font-semibold">
                     <i data-lucide="arrow-left" class="w-4 h-4"></i>
                     Kembali ke Daftar Pesan
                 </button>
             </div>
 
-            <!-- Email Header (Compact Gmail-Style with Expandable Detail Popover) -->
-            <div class="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-800 bg-slate-900/70 shrink-0"
+            <!-- Email Header: Modern Glassmorphic Card -->
+            <div class="px-5 py-4 sm:px-7 sm:py-4.5 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md shrink-0"
                  x-data="{ showHeaderDetails: false, showMoveDropdown: false }"
                  wire:key="header-{{ $selectedEmail['id'] }}">
-                <div class="flex items-center justify-between gap-3">
-                    <!-- Left: Avatar, Subject & Quick Sender with Detail Toggle -->
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600/30 to-indigo-600/30 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-white/10">
+                <div class="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-3">
+                    <!-- Left: Sender Info, Subject & Detail Toggle -->
+                    <div class="flex items-center gap-3.5 min-w-0">
+                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-extrabold text-sm shrink-0 shadow-lg shadow-indigo-600/25 ring-2 ring-white/10">
                             {{ strtoupper(substr($selectedEmail['from_name'], 0, 1)) }}
                         </div>
                         <div class="min-w-0">
-                            <div class="flex items-center gap-2">
-                                <h3 class="text-sm sm:text-base font-bold text-white tracking-tight truncate">{{ $selectedEmail['subject'] }}</h3>
-                            </div>
-                            <div class="flex items-center gap-1.5 text-xs text-slate-400 relative">
+                            <h2 class="text-base sm:text-lg font-bold text-white tracking-tight truncate">{{ $selectedEmail['subject'] }}</h2>
+                            <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                                 <span class="font-semibold text-slate-200 truncate">{{ $selectedEmail['from_name'] }}</span>
+                                <span class="text-slate-600">•</span>
+                                <span class="font-mono text-cyan-300/90 text-[11px] truncate">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
                                 
-                                <!-- Gmail Style Detail Toggle Button -->
+                                <!-- Detail Toggle Button -->
                                 <button @click="showHeaderDetails = !showHeaderDetails" 
-                                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 text-[11px] text-slate-400 hover:text-cyan-300 transition-colors border border-transparent hover:border-slate-700">
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-[10px] text-slate-400 hover:text-cyan-300 transition-colors border border-slate-700/60 ml-1">
                                     <span>detail</span>
                                     <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="showHeaderDetails ? 'rotate-180' : ''"></i>
                                 </button>
@@ -964,100 +1007,112 @@ new class extends Component
                     </div>
 
                     <!-- Right: Action Bar & Date -->
-                    <div class="flex items-center gap-1.5 shrink-0">
-                        <span class="text-slate-400 text-xs font-medium hidden lg:inline mr-1 px-2 py-0.5 rounded bg-slate-950/60 border border-slate-800">{{ $selectedEmail['date'] }}</span>
+                    <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                        <span class="text-slate-400 text-xs font-medium hidden xl:inline-block mr-2 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800">
+                            {{ $selectedEmail['date'] }}
+                        </span>
                         
                         @if($activeFolder === 'trash')
-                            <!-- Tombol Pulihkan dari Sampah (Cukup 1 tombol di header toolbar) -->
+                            <!-- Tombol Pulihkan dari Sampah -->
                             <button wire:click="restoreFromTrash" 
-                                    class="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                                    class="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
                                     title="Kembalikan ke Kotak Masuk">
-                                <i data-lucide="archive-restore" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="archive-restore" class="w-4 h-4"></i>
                                 <span>Kembalikan</span>
                             </button>
 
                             <!-- Hapus Permanen -->
                             <button wire:click="deleteSelectedEmail" 
-                                    class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                    class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-2 transition-all"
                                     title="Hapus Selamanya">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 <span>Hapus Selamanya</span>
                             </button>
                         @elseif($activeFolder === 'spam')
-                            <!-- Aksi Khusus Folder SPAM (Gaya Gmail) -->
+                            <!-- Aksi Khusus Folder SPAM -->
                             <button wire:click="markNotSpam" 
-                                    class="px-3 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                                    class="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
                                     title="Tandai Bukan Spam dan Pindahkan ke Kotak Masuk">
-                                <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
                                 <span>Bukan Spam</span>
                             </button>
 
                             <button wire:click="deleteSelectedEmail" 
-                                    class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                    class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-2 transition-all"
                                     title="Hapus Selamanya">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 <span>Hapus Selamanya</span>
                             </button>
                         @elseif($activeFolder === 'drafts')
-                            <!-- Aksi Khusus Folder DRAFTS (Gaya Gmail) -->
+                            <!-- Aksi Khusus Folder DRAFTS -->
                             <button wire:click="openDraft({{ $selectedEmail['id'] }})" 
-                                    class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30"
+                                    class="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30"
                                     title="Buka dan Lanjutkan Tulis Draf">
-                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
                                 <span>Lanjutkan Menulis</span>
                             </button>
 
                             <button wire:click="deleteSelectedEmail" 
-                                    class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                    class="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700/80 text-xs font-semibold flex items-center gap-1.5 transition-all"
                                     title="Buang Draf Ini">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 <span>Buang Draf</span>
                             </button>
                         @else
-                            <!-- Toggle Read / Unread -->
+                            <!-- Standard Email Actions -->
                             <button wire:click="toggleReadStatus({{ $selectedEmail['id'] }})" 
-                                    class="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-cyan-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
                                     title="{{ $selectedEmail['is_read'] ? 'Tandai Belum Dibaca' : 'Tandai Sudah Dibaca' }}">
-                                <i data-lucide="{{ $selectedEmail['is_read'] ? 'mail' : 'mail-open' }}" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+                                <i data-lucide="{{ $selectedEmail['is_read'] ? 'mail' : 'mail-open' }}" class="w-4 h-4"></i>
                             </button>
 
-                            <button wire:click="toggleStar({{ $selectedEmail['id'] }})" class="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors" title="Bintang">
-                                <i data-lucide="star" class="w-3.5 h-3.5 sm:w-4 sm:h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                            <button wire:click="toggleStar({{ $selectedEmail['id'] }})" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-amber-400 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
+                                    title="Bintang">
+                                <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
                             </button>
 
                             <!-- Pindahkan ke Folder Dropdown -->
                             <div class="relative">
-                                <button @click="showMoveDropdown = !showMoveDropdown" class="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors" title="Pindahkan ke Folder">
-                                    <i data-lucide="folder-input" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+                                <button @click="showMoveDropdown = !showMoveDropdown" 
+                                        class="p-2 rounded-xl text-slate-400 hover:text-cyan-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
+                                        title="Pindahkan ke Folder">
+                                    <i data-lucide="folder-input" class="w-4 h-4"></i>
                                 </button>
                                 <div x-show="showMoveDropdown" @click.away="showMoveDropdown = false" 
-                                     class="absolute right-0 mt-2 w-44 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1 text-xs z-30 space-y-0.5" style="display: none;">
-                                    <div class="px-3 py-1 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-800">Pindahkan Ke:</div>
-                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('inbox')" class="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-2">
-                                        <i data-lucide="inbox" class="w-3.5 h-3.5"></i> Kotak Masuk
+                                     class="absolute right-0 mt-2 w-48 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl py-1.5 text-xs z-30 space-y-0.5 backdrop-blur-xl" style="display: none;">
+                                    <div class="px-3.5 py-1 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-800">Pindahkan Ke:</div>
+                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('inbox')" class="w-full text-left px-3.5 py-2 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-2.5">
+                                        <i data-lucide="inbox" class="w-3.5 h-3.5 text-cyan-400"></i> Kotak Masuk
                                     </button>
-                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('spam')" class="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-amber-400 hover:text-amber-300 flex items-center gap-2">
+                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('spam')" class="w-full text-left px-3.5 py-2 hover:bg-slate-800 text-amber-400 hover:text-amber-300 flex items-center gap-2.5">
                                         <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i> Tandai Spam
                                     </button>
                                     @foreach($customFolders as $cf)
-                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('{{ $cf }}')" class="w-full text-left px-3 py-1.5 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-2 truncate">
+                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('{{ $cf }}')" class="w-full text-left px-3.5 py-2 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-2.5 truncate">
                                         <i data-lucide="folder" class="w-3.5 h-3.5 text-cyan-400"></i> {{ $cf }}
                                     </button>
                                     @endforeach
                                 </div>
                             </div>
                             
-                            <button @click="showInlineReply = !showInlineReply" class="px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shadow-indigo-600/20">
+                            <!-- Balas Button -->
+                            <button @click="showInlineReply = !showInlineReply" 
+                                    class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/25">
                                 <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                                 <span>Balas</span>
                             </button>
 
-                            <button wire:click="forwardEmail" class="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition-colors" title="Teruskan">
-                                <i data-lucide="forward" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+                            <button wire:click="forwardEmail" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-indigo-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
+                                    title="Teruskan">
+                                <i data-lucide="forward" class="w-4 h-4"></i>
                             </button>
                             
-                            <button wire:click="deleteSelectedEmail" class="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors" title="Hapus ke Sampah">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+                            <button wire:click="deleteSelectedEmail" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-rose-400 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
+                                    title="Hapus ke Sampah">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         @endif
                     </div>
@@ -1069,7 +1124,7 @@ new class extends Component
                      x-transition:enter="transition ease-out duration-150"
                      x-transition:enter-start="opacity-0 translate-y-1 scale-98"
                      x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-                     class="mt-3 p-4 rounded-xl bg-slate-950/95 border border-slate-700/80 shadow-2xl max-w-xl text-xs space-y-2.5 backdrop-blur-md">
+                     class="mt-3.5 p-4 rounded-2xl bg-slate-950/95 border border-slate-700/80 shadow-2xl max-w-xl text-xs space-y-2.5 backdrop-blur-xl">
                     <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline">
                         <span class="text-slate-400 font-medium">Dari:</span>
                         <div class="text-slate-200">
@@ -1089,16 +1144,16 @@ new class extends Component
                         <span class="text-slate-400 font-medium">Subjek:</span>
                         <span class="text-slate-200 font-semibold">{{ $selectedEmail['subject'] }}</span>
                     </div>
-                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline pt-1 border-t border-slate-800">
+                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline pt-2 border-t border-slate-800">
                         <span class="text-slate-400 font-medium">Keamanan:</span>
                         @if($activeFolder === 'spam')
                             <div class="flex items-center gap-2 text-rose-400 font-mono text-[11px]">
-                                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="shield-alert" class="w-4 h-4"></i>
                                 <span>Unverified Sender • SPF FAIL • Skor Spam: {{ $selectedEmail['spam_score'] ?? '7.8' }}/10</span>
                             </div>
                         @else
                             <div class="flex items-center gap-2 text-emerald-400 font-mono text-[11px]">
-                                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="shield-check" class="w-4 h-4"></i>
                                 <span>Enkripsi Standar (TLS/SSL) • SPF PASS • DKIM PASS</span>
                             </div>
                         @endif
@@ -1108,9 +1163,9 @@ new class extends Component
 
             <!-- Gmail-Style Warning Banner Saat Berada di Folder SPAM -->
             @if($activeFolder === 'spam')
-            <div class="px-5 py-3.5 bg-rose-500/10 border-b border-rose-500/20 text-xs text-rose-300 space-y-2 shrink-0">
-                <div class="flex items-start gap-2.5">
-                    <div class="p-1 rounded-lg bg-rose-500/20 text-rose-400 mt-0.5 shrink-0">
+            <div class="px-6 py-3.5 bg-rose-500/10 border-b border-rose-500/25 text-xs text-rose-300 space-y-2 shrink-0">
+                <div class="flex items-start gap-3">
+                    <div class="p-1.5 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
                         <i data-lucide="alert-octagon" class="w-4 h-4"></i>
                     </div>
                     <div class="space-y-1">
@@ -1118,95 +1173,95 @@ new class extends Component
                             Mengapa pesan ini berada di Spam?
                         </p>
                         <p class="text-rose-200/90 leading-relaxed text-[11px]">
-                            {{ $selectedEmail['spam_reason'] ?? 'Pesan ini memiliki pola yang mirip dengan email phishing atau promosi tidak diminta (Unsolicited Bulk Email). Filter keamanan MailIDS menempatkannya di sini untuk melindungi akun Anda.' }}
+                            {{ $selectedEmail['spam_reason'] ?? 'Pesan ini memiliki karakteristik email massal tanpa reputasi terverifikasi. Filter MailIDS mengamankannya di sini.' }}
                         </p>
                     </div>
                 </div>
             </div>
             @endif
 
-            <!-- Notice Bersih Minimalis di Folder Sampah (Tanpa Tombol Duplikat) -->
+            <!-- Notice Bersih Minimalis di Folder Sampah -->
             @if($activeFolder === 'trash')
-            <div class="px-5 py-2 bg-slate-900/40 border-b border-slate-800/80 flex items-center gap-2 text-xs text-slate-400 shrink-0">
-                <i data-lucide="info" class="w-3.5 h-3.5 text-slate-500"></i>
+            <div class="px-6 py-2.5 bg-slate-900/40 border-b border-slate-800/80 flex items-center gap-2 text-xs text-slate-400 shrink-0">
+                <i data-lucide="info" class="w-4 h-4 text-cyan-400"></i>
                 <span>Pesan ini berada di <strong>Sampah</strong>. Gunakan tombol <strong>Kembalikan</strong> di kanan atas untuk memulihkan ke Kotak Masuk.</span>
             </div>
             @endif
 
-            <!-- Scrollable Reading Area (Isi Email Leluasa dan Bersih) -->
+            <!-- Scrollable Reading Area -->
             <div class="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
-                <!-- Email Body Text -->
-                <div class="text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line bg-slate-900/30 p-5 sm:p-6 rounded-2xl border border-slate-800/80 shadow-inner">
+                <!-- Email Body Card -->
+                <div class="text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line bg-slate-900/40 p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-lg shadow-black/20">
                     {{ $selectedEmail['body'] }}
                 </div>
 
-                <!-- Attachment Files Section (Jika ada) -->
+                <!-- Attachment Files Section -->
                 @if(!empty($selectedEmail['attachments']))
-                <div class="p-4 rounded-2xl bg-slate-900/40 border border-slate-800">
+                <div class="p-5 rounded-3xl bg-slate-900/50 border border-slate-800/80 shadow-md">
                     <p class="text-xs font-bold text-slate-300 mb-3 flex items-center gap-2">
                         <i data-lucide="paperclip" class="w-4 h-4 text-cyan-400"></i>
                         Dokumen Lampiran ({{ count($selectedEmail['attachments']) }} File):
                     </p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         @foreach($selectedEmail['attachments'] as $att)
-                        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2 hover:border-slate-700 transition-all">
+                        <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2 hover:border-cyan-500/50 transition-all">
                             <div class="flex items-center gap-2.5 truncate">
-                                <i data-lucide="file-text" class="w-4 h-4 text-indigo-400 shrink-0"></i>
+                                <i data-lucide="file-text" class="w-4 h-4 text-cyan-400 shrink-0"></i>
                                 <span class="text-xs text-slate-200 font-mono truncate">{{ $att }}</span>
                             </div>
-                            <span class="text-[10px] text-slate-500 uppercase shrink-0">Unduh</span>
+                            <span class="text-[10px] text-cyan-400 font-bold uppercase shrink-0 hover:underline cursor-pointer">Unduh</span>
                         </div>
                         @endforeach
                     </div>
                 </div>
                 @endif
 
-                <!-- Tombol Aksi Bawah Email (Menyesuaikan Folder) -->
+                <!-- Tombol Aksi Bawah Email -->
                 @if($activeFolder === 'drafts')
                 <div class="pt-2">
                     <button wire:click="openDraft({{ $selectedEmail['id'] }})" 
-                            class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all">
+                            class="px-5 py-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all">
                         <i data-lucide="edit-3" class="w-4 h-4"></i>
                         <span>Lanjutkan Menulis Draf Ini</span>
                     </button>
                 </div>
                 @else
-                <!-- Tombol Buka Form Balas (Jika form balas tertutup) -->
+                <!-- Tombol Buka Form Balas -->
                 <div x-show="!showInlineReply" class="pt-2">
                     <button @click="showInlineReply = true" 
-                            class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md transition-all">
+                            class="px-5 py-3 bg-slate-900 hover:bg-slate-850 border border-slate-700/80 hover:border-cyan-500 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-md transition-all">
                         <i data-lucide="reply" class="w-4 h-4 text-cyan-400"></i>
-                        <span>Tulis Balasan untuk Email Ini</span>
+                        <span>Tulis Balasan Cepat</span>
                     </button>
                 </div>
                 @endif
 
-                <!-- Form Balas Pesan (Tampil hanya ketika tombol Balas diklik) -->
+                <!-- Form Balas Pesan (Inline Quick Reply) -->
                 <div x-show="showInlineReply" 
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0 -translate-y-2"
                      x-transition:enter-end="opacity-100 translate-y-0"
-                     class="p-5 rounded-2xl bg-slate-900/80 border border-indigo-500/40 shadow-xl space-y-3">
+                     class="p-5 sm:p-6 rounded-3xl bg-slate-900/90 border border-cyan-500/40 shadow-2xl space-y-4">
                     <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                         <div class="flex items-center gap-2">
-                            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
                             <span class="text-xs font-bold text-white">Membalas ke:</span>
                             <span class="text-xs text-cyan-300 font-mono">{{ $selectedEmail['from_email'] }}</span>
                         </div>
-                        <button @click="showInlineReply = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+                        <button @click="showInlineReply = false" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors">
                             <i data-lucide="x" class="w-4 h-4"></i>
                         </button>
                     </div>
 
-                    <form wire:submit="sendQuickReply" class="space-y-3">
+                    <form wire:submit="sendQuickReply" class="space-y-3.5">
                         <textarea wire:model="quickReplyText" rows="4" placeholder="Ketik balasan Anda di sini..." 
-                                  class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-sans"></textarea>
+                                  class="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans"></textarea>
                         @error('quickReplyText') <span class="text-xs text-rose-400 block">{{ $message }}</span> @enderror
 
                         @if(!empty($quickReplyAttachments))
                         <div class="flex flex-wrap gap-2 text-xs text-cyan-300 font-mono">
                             @foreach($quickReplyAttachments as $file)
-                                <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-1.5">
+                                <span class="px-3 py-1 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
                                     <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400"></i>
                                     {{ $file->getClientOriginalName() }}
                                 </span>
@@ -1215,15 +1270,15 @@ new class extends Component
                         @endif
 
                         <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
-                            <label class="cursor-pointer text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700">
+                            <label class="cursor-pointer text-cyan-400 hover:text-cyan-300 flex items-center gap-2 text-xs font-semibold py-2 px-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all">
                                 <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                                <span>Lampirkan File</span>
+                                <span>Lampirkan Dokumen</span>
                                 <input type="file" wire:model="quickReplyAttachments" multiple class="hidden">
                             </label>
 
-                            <div class="flex items-center gap-2">
-                                <button type="button" @click="showInlineReply = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">
-                                    Tutup
+                            <div class="flex items-center gap-2.5">
+                                <button type="button" @click="showInlineReply = false" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white">
+                                    Batal
                                 </button>
                                 <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-cyan-600/25 flex items-center gap-2 transition-all">
                                     <i data-lucide="send" class="w-3.5 h-3.5"></i>
@@ -1236,90 +1291,96 @@ new class extends Component
                 </div>
             </div>
             @else
-            <div class="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs">
-                <i data-lucide="mail-open" class="w-10 h-10 mb-2 stroke-1 text-slate-600"></i>
-                Pilih pesan di sebelah kiri untuk membaca
-            </div>
-            @endif
-        </div>
-    </div>
-
-    <!-- Modal Tulis Pesan (Compose) Lengkap dengan CC/BCC -->
-    @if($showComposeModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div class="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
-                <h4 class="text-sm font-bold text-white flex items-center gap-2">
-                    <i data-lucide="send" class="w-4 h-4 text-indigo-400"></i>
-                    {{ $editingDraftId ? 'Edit Draf Pesan' : 'Tulis Pesan Baru' }}
-                    @if($editingDraftId)
-                        <span class="text-[9px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">DRAFT</span>
-                    @endif
-                </h4>
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] text-slate-500 hidden sm:inline">Tutup untuk simpan otomatis ke Drafts</span>
-                    <button type="button" wire:click="closeComposeModal" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" title="Simpan ke Draf & Tutup">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
+            <div class="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs space-y-3">
+                <div class="w-14 h-14 rounded-3xl bg-slate-900/60 border border-slate-800 flex items-center justify-center text-slate-500">
+                    <i data-lucide="mail-open" class="w-7 h-7 stroke-1 text-slate-400"></i>
+                </div>
+                <div class="text-center">
+                    <p class="font-bold text-sm text-slate-300">Belum Ada Pesan yang Dipilih</p>
+                    <p class="text-slate-500 text-xs mt-1">Pilih salah satu pesan di daftar sebelah kiri untuk membaca</p>
                 </div>
             </div>
+            @endif
+     <!-- Modal Tulis Pesan (Compose) Lengkap dengan CC/BCC -->
+    @if($showComposeModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+        <div class="w-full max-w-2xl bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl">
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/25">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            {{ $editingDraftId ? 'Edit Draf Pesan' : 'Tulis Pesan Baru' }}
+                            @if($editingDraftId)
+                                <span class="text-[9px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">DRAFT</span>
+                            @endif
+                        </h4>
+                        <span class="text-[10px] text-slate-500">Tersimpan otomatis ke folder Drafts</span>
+                    </div>
+                </div>
+                <button type="button" wire:click="closeComposeModal" class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Simpan ke Draf & Tutup">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
 
-            <form wire:submit="sendEmail" class="p-5 space-y-4">
+            <form wire:submit="sendEmail" class="p-6 space-y-4">
                 <div>
-                    <div class="flex items-center justify-between mb-1">
-                        <label class="block text-xs font-semibold text-slate-300">Kepada (To)</label>
-                        <button type="button" wire:click="$toggle('showCcBcc')" class="text-[11px] text-indigo-400 hover:text-indigo-300">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-slate-300">Kepada (To)</label>
+                        <button type="button" wire:click="$toggle('showCcBcc')" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold">
                             {{ $showCcBcc ? 'Sembunyikan CC/BCC' : '+ Tambah CC / BCC' }}
                         </button>
                     </div>
                     <input type="email" wire:model="composeTo" placeholder="alamat@tujuan.com" 
-                           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-                    @error('composeTo') <span class="text-xs text-rose-400 mt-1 block">{{ $message }}</span> @enderror
+                           class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
+                    @error('composeTo') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
                 </div>
 
                 @if($showCcBcc)
-                <div class="grid grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">CC</label>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">CC</label>
                         <input type="email" wire:model="composeCc" placeholder="cc@domain.com" 
-                               class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                               class="w-full px-4 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">BCC</label>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">BCC</label>
                         <input type="email" wire:model="composeBcc" placeholder="bcc@domain.com" 
-                               class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                               class="w-full px-4 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
                     </div>
                 </div>
                 @endif
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Subjek Pesan</label>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Subjek Pesan</label>
                     <input type="text" wire:model="composeSubject" placeholder="Subjek email..." 
-                           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-                    @error('composeSubject') <span class="text-xs text-rose-400 mt-1 block">{{ $message }}</span> @enderror
+                           class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
+                    @error('composeSubject') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1">Isi Pesan</label>
-                    <textarea rows="6" wire:model="composeBody" placeholder="Tulis isi pesan email di sini..." 
-                              class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-sans"></textarea>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">Isi Pesan</label>
+                    <textarea rows="7" wire:model="composeBody" placeholder="Tulis isi pesan email Anda di sini..." 
+                              class="w-full px-4 py-3 bg-slate-950/90 border border-slate-700/80 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans shadow-inner"></textarea>
                 </div>
 
                 <!-- File Attachment Field -->
                 <div>
                     <div class="flex items-center justify-between">
-                        <label class="cursor-pointer inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                        <label class="cursor-pointer inline-flex items-center gap-2 text-xs text-cyan-400 hover:text-cyan-300 font-semibold py-1.5 px-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 transition-all">
                             <i data-lucide="paperclip" class="w-4 h-4"></i>
-                            <span>Lampirkan Dokumen / File</span>
+                            <span>Lampirkan File Dokumen</span>
                             <input type="file" wire:model="attachments" multiple class="hidden">
                         </label>
                         <span wire:loading wire:target="attachments" class="text-[11px] text-amber-400 animate-pulse">Mengunggah file...</span>
                     </div>
 
                     @if(!empty($attachments))
-                    <div class="flex flex-wrap gap-2 mt-2">
+                    <div class="flex flex-wrap gap-2 mt-2.5">
                         @foreach($attachments as $file)
-                        <span class="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-700 text-xs text-indigo-300 font-mono flex items-center gap-1.5">
+                        <span class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-mono flex items-center gap-2 shadow-sm">
                             <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400"></i>
                             {{ $file->getClientOriginalName() }}
                         </span>
@@ -1328,26 +1389,25 @@ new class extends Component
                     @endif
                 </div>
 
-                <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
+                <div class="flex items-center justify-between gap-3 pt-4 border-t border-slate-800">
                     <div class="flex items-center gap-2">
-                        <!-- Buang Draf (Trash Icon) -->
                         <button type="button" wire:click="discardDraft" 
-                                class="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors" 
+                                class="p-2.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" 
                                 title="Buang draf ini">
-                            <i data-lucide="trash" class="w-4 h-4"></i>
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                         <button type="button" wire:click="saveDraftNow" 
-                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all">
+                                class="px-4 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-750 text-slate-300 text-xs font-semibold flex items-center gap-2 transition-all border border-slate-700/60">
                             <i data-lucide="save" class="w-3.5 h-3.5"></i>
                             <span>Simpan Draf</span>
                         </button>
                     </div>
 
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2.5">
                         <button type="button" wire:click="closeComposeModal" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white">
                             Tutup
                         </button>
-                        <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center gap-2">
+                        <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-cyan-600/25 flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i>
                             <span wire:loading.remove wire:target="sendEmail">Kirim Pesan</span>
                             <span wire:loading wire:target="sendEmail">Mengirim via Postfix...</span>
@@ -1359,33 +1419,33 @@ new class extends Component
     </div>
     @endif
 
-    <!-- Modal Buat Folder Baru (Gaya Hostinger Webmail) -->
+    <!-- Modal Buat Folder Baru -->
     @if($showCreateFolderModal)
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-            <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+        <div class="w-full max-w-sm bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl">
+            <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
                 <h4 class="text-sm font-bold text-white flex items-center gap-2">
-                    <i data-lucide="folder-plus" class="w-4 h-4 text-indigo-400"></i>
+                    <i data-lucide="folder-plus" class="w-4 h-4 text-cyan-400"></i>
                     Buat Folder Kustom Baru
                 </h4>
-                <button wire:click="$set('showCreateFolderModal', false)" class="text-slate-400 hover:text-white">
+                <button wire:click="$set('showCreateFolderModal', false)" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
 
             <form wire:submit="createFolder" class="p-5 space-y-4 text-xs">
                 <div>
-                    <label class="block font-semibold text-slate-300 mb-1">Nama Folder</label>
+                    <label class="block font-bold text-slate-300 mb-1.5">Nama Folder</label>
                     <input type="text" wire:model="newFolderName" placeholder="contoh: Arsip Proyek, Pajak, Klien VIP" 
-                           class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-                    @error('newFolderName') <span class="text-xs text-rose-400 mt-1 block">{{ $message }}</span> @enderror
+                           class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500">
+                    @error('newFolderName') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
                 </div>
 
-                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                    <button type="button" wire:click="$set('showCreateFolderModal', false)" class="px-4 py-2 text-slate-400 hover:text-white">
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                    <button type="button" wire:click="$set('showCreateFolderModal', false)" class="px-4 py-2 text-slate-400 hover:text-white font-medium">
                         Batal
                     </button>
-                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-md transition-all">
+                    <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-600/25 transition-all">
                         Simpan Folder
                     </button>
                 </div>

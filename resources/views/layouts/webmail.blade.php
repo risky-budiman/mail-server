@@ -14,33 +14,43 @@
     @livewireStyles
 </head>
 <body class="h-full antialiased font-sans bg-slate-950 text-slate-100 overflow-hidden flex flex-col">
-    <!-- Top Webmail Navigation Header (Tanpa menu Admin Mail Server) -->
-    <header class="h-14 px-4 sm:px-6 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0 z-20">
+    <!-- Top Webmail Navigation Header -->
+    <header class="h-16 px-4 sm:px-6 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between shrink-0 z-30 shadow-lg shadow-black/20">
         <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-md shadow-cyan-500/20">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-1 ring-white/20">
                 <i data-lucide="mail" class="w-4 h-4 text-white"></i>
             </div>
-            <div>
-                <span class="font-bold text-white text-sm tracking-tight flex items-center gap-1.5">
-                    Mail<span class="text-cyan-400">IDS</span>
-                    <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">WEBMAIL</span>
+            <div class="flex items-center gap-2">
+                <span class="font-extrabold text-white text-base tracking-tight flex items-center gap-1.5">
+                    Mail<span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">IDS</span>
+                </span>
+                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/10 to-indigo-500/10 text-cyan-400 border border-cyan-500/20 shadow-sm">
+                    Webmail Client
                 </span>
             </div>
         </div>
 
-        <div class="flex items-center gap-3">
-            <div class="text-xs text-slate-300 font-medium flex items-center gap-2">
-                <div class="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-xs">
+        <div class="flex items-center gap-3 sm:gap-4">
+            <!-- Active Mailbox Pill -->
+            <div class="px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5 shadow-inner">
+                <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-xs">
                     {{ strtoupper(substr(auth('mailbox')->user()->email ?? 'U', 0, 1)) }}
                 </div>
-                <span class="hidden sm:inline font-mono text-cyan-300">{{ auth('mailbox')->user()->email ?? 'user@domain.com' }}</span>
+                <div class="flex flex-col text-left">
+                    <span class="text-[11px] font-semibold text-slate-200 font-mono leading-none">
+                        {{ auth('mailbox')->user()->email ?? 'user@domain.com' }}
+                    </span>
+                    <span class="text-[9px] text-emerald-400 font-medium flex items-center gap-1 leading-tight mt-0.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> IMAP/SMTP Connected
+                    </span>
+                </div>
             </div>
 
-            <div class="h-5 w-px bg-slate-800"></div>
+            <div class="h-6 w-px bg-slate-800"></div>
 
             <form method="POST" action="{{ route('webmail.logout') }}" class="inline">
                 @csrf
-                <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700">
+                <button type="submit" class="px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/15 text-slate-300 hover:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80 hover:border-rose-500/30 shadow-sm" title="Keluar dari Webmail">
                     <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                     <span class="hidden sm:inline">Keluar</span>
                 </button>
