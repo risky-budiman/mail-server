@@ -59,7 +59,7 @@
     </header>
 
     <!-- Webmail Body Slot -->
-    <main class="flex-1 p-3 sm:p-5 overflow-hidden flex flex-col min-w-0">
+    <main class="flex-1 p-2 sm:p-4 min-h-0 overflow-hidden flex flex-col">
         {{ $slot }}
     </main>
 

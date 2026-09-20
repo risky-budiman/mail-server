@@ -680,7 +680,7 @@ new class extends Component
 };
 ?>
 
-<div class="h-[calc(100vh-6rem)] md:h-[calc(100vh-7rem)] flex flex-col rounded-2xl bg-slate-900/90 border border-slate-800/90 overflow-hidden shadow-2xl backdrop-blur-xl"
+<div class="h-full min-h-0 flex-1 flex flex-col rounded-2xl bg-slate-900/90 border border-slate-800/90 overflow-hidden shadow-2xl backdrop-blur-xl"
      x-data="{ showFolderSidebar: false, mobileEmailOpen: false }">
     
     <!-- Top Action Toolbar -->
@@ -730,10 +730,11 @@ new class extends Component
 
     <!-- 3-Column Webmail Layout -->
     <div class="flex-1 flex overflow-hidden relative">
-        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, 210px on Desktop) -->
+        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, w-60 on Desktop) -->
         <div :class="showFolderSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-             class="absolute md:static inset-y-0 left-0 w-56 bg-slate-950/95 md:bg-slate-950/60 backdrop-blur-xl border-r border-slate-800/80 p-3.5 flex flex-col justify-between shrink-0 z-20 transition-transform duration-200 ease-in-out">
-            <div class="space-y-1.5">
+             class="absolute md:static inset-y-0 left-0 w-60 bg-slate-950/95 md:bg-slate-950/70 backdrop-blur-xl border-r border-slate-800/80 p-3 flex flex-col justify-between shrink-0 z-20 transition-transform duration-200 ease-in-out h-full overflow-hidden">
+            <!-- Scrollable Folder List Area -->
+            <div class="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1 pb-2">
                 <div class="flex items-center justify-between md:hidden pb-2 mb-2 border-b border-slate-800">
                     <span class="text-xs font-bold text-slate-300">Navigasi Folder</span>
                     <button @click="showFolderSidebar = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
@@ -743,7 +744,7 @@ new class extends Component
 
                 <!-- Inbox -->
                 <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
                             <i data-lucide="inbox" class="w-3.5 h-3.5"></i>
@@ -759,7 +760,7 @@ new class extends Component
 
                 <!-- Sent -->
                 <button wire:click="selectFolder('sent')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'sent' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-indigo-400' }}">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i>
@@ -770,7 +771,7 @@ new class extends Component
 
                 <!-- Drafts -->
                 <button wire:click="selectFolder('drafts')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'drafts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-rose-400' }}">
                             <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
@@ -786,7 +787,7 @@ new class extends Component
 
                 <!-- Folder Spam -->
                 <button wire:click="selectFolder('spam')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'spam' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-amber-400' }}">
                             <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
@@ -802,7 +803,7 @@ new class extends Component
 
                 <!-- Trash -->
                 <button wire:click="selectFolder('trash')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'trash' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-slate-400' }}">
                             <i data-lucide="trash" class="w-3.5 h-3.5"></i>
@@ -812,8 +813,8 @@ new class extends Component
                 </button>
 
                 <!-- Kumpulan Folder Kustom -->
-                <div class="pt-4 mt-3 border-t border-slate-800/80">
-                    <div class="flex items-center justify-between px-2 mb-2">
+                <div class="pt-3 mt-2 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between px-2 mb-1.5">
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Folder Kustom</span>
                         <button @click="$wire.set('showCreateFolderModal', true)" 
                                 class="p-1 rounded-lg hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 transition-colors" 
@@ -826,7 +827,7 @@ new class extends Component
                         @foreach($customFolders as $folder)
                         <div class="group relative flex items-center justify-between rounded-xl transition-all {{ $activeFolder === $folder ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-white' }}">
                             <button wire:click="selectFolder('{{ $folder }}')" @click="showFolderSidebar = false"
-                                    class="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium truncate text-left">
+                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium truncate text-left">
                                 <i data-lucide="folder" class="w-3.5 h-3.5 {{ $activeFolder === $folder ? 'text-white' : 'text-cyan-400' }} shrink-0"></i>
                                 <span class="truncate">{{ $folder }}</span>
                             </button>
@@ -835,7 +836,7 @@ new class extends Component
                             <button type="button" 
                                     wire:click="deleteFolder('{{ $folder }}')" 
                                     wire:confirm="Yakin ingin menghapus folder '{{ $folder }}'? Email di dalamnya akan dipindahkan ke Kotak Masuk."
-                                    class="opacity-0 group-hover:opacity-100 p-1.5 mr-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0" 
+                                    class="opacity-0 group-hover:opacity-100 p-1 mr-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0" 
                                     title="Hapus folder {{ $folder }}">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
@@ -845,33 +846,35 @@ new class extends Component
                 </div>
             </div>
 
-            <!-- Kuota Info Dinamis dari Database virtual_users & Dovecot -->
+            <!-- Kuota Info Dinamis dari Database virtual_users & Dovecot (Fixed Bottom Widget) -->
             @php
                 $usedFormatted = $currentAccount ? $currentAccount->formatted_used : '1.16 GB';
                 $quotaFormatted = $currentAccount ? $currentAccount->formatted_quota : '5 GB';
                 $usagePercent = $currentAccount ? $currentAccount->quota_usage_percent : 23;
                 $barColor = $usagePercent >= 90 ? 'from-rose-500 to-red-600' : ($usagePercent >= 75 ? 'from-amber-400 to-orange-500' : 'from-cyan-400 to-indigo-500');
             @endphp
-            <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-2 shadow-inner" title="Kapasitas penyimpanan akun {{ $currentAccount->email ?? '' }}">
-                <div class="flex justify-between font-medium">
-                    <span class="flex items-center gap-1.5">
-                        <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-cyan-400"></i>
-                        <span class="text-slate-300 font-semibold">Penyimpanan</span>
-                    </span>
-                    <span class="text-slate-400 font-mono text-[10px]">{{ $usedFormatted }} / {{ $quotaFormatted }}</span>
-                </div>
-                <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                    <div class="h-full bg-gradient-to-r {{ $barColor }} rounded-full transition-all duration-500" style="width: {{ $usagePercent }}%"></div>
-                </div>
-                <div class="flex justify-between text-[10px] text-slate-500 pt-0.5">
-                    <span>Terpakai {{ $usagePercent }}%</span>
-                    @if($usagePercent >= 90)
-                        <span class="text-rose-400 font-bold flex items-center gap-0.5">
-                            <i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> Hampir Penuh
+            <div class="mt-2 pt-2 border-t border-slate-800/80 shrink-0">
+                <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-1.5 shadow-inner" title="Kapasitas penyimpanan akun {{ $currentAccount->email ?? '' }}">
+                    <div class="flex items-center justify-between font-medium">
+                        <span class="flex items-center gap-1.5">
+                            <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-cyan-400"></i>
+                            <span class="text-slate-300 font-semibold text-[11px]">Penyimpanan</span>
                         </span>
-                    @else
-                        <span class="text-emerald-400 font-medium">Tersedia {{ 100 - $usagePercent }}%</span>
-                    @endif
+                        <span class="text-slate-400 font-mono text-[10px]">{{ $usedFormatted }} / {{ $quotaFormatted }}</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                        <div class="h-full bg-gradient-to-r {{ $barColor }} rounded-full transition-all duration-500" style="width: {{ $usagePercent }}%"></div>
+                    </div>
+                    <div class="flex justify-between text-[9px] text-slate-500 pt-0.5">
+                        <span>Terpakai {{ $usagePercent }}%</span>
+                        @if($usagePercent >= 90)
+                            <span class="text-rose-400 font-bold flex items-center gap-0.5">
+                                <i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> Hampir Penuh
+                            </span>
+                        @else
+                            <span class="text-emerald-400 font-medium">Tersedia {{ 100 - $usagePercent }}%</span>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
