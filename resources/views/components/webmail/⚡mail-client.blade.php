@@ -11,7 +11,10 @@ new class extends Component
     use WithFileUploads;
 
     public $activeFolder = 'inbox'; // inbox, sent, drafts, spam, trash, or custom folder name
-    public $selectedEmailId = 1;
+    public $selectedEmailId = null;
+    public $viewMode = 'list'; // 'list' or 'detail' (Gmail/Hostinger style)
+    public $activeFilter = 'all'; // 'all', 'unread', 'read', 'starred'
+    public $selectedIds = []; // Checkbox select all / multiple
     public $showComposeModal = false;
     public $currentAccount = null;
 
@@ -284,12 +287,19 @@ new class extends Component
     public function selectFolder($folder)
     {
         $this->activeFolder = $folder;
-        $filtered = collect($this->emails)->where('folder', $folder)->first();
-        if ($filtered) {
-            $this->selectEmail($filtered['id']);
-        } else {
-            $this->selectedEmailId = null;
-        }
+        $this->viewMode = 'list';
+        $this->selectedEmailId = null;
+        $this->selectedIds = [];
+    }
+
+    public function backToList()
+    {
+        $this->viewMode = 'list';
+    }
+
+    public function setFilter($filter)
+    {
+        $this->activeFilter = $filter;
     }
 
     public function createFolder()
@@ -312,7 +322,6 @@ new class extends Component
 
     public function deleteFolder($folderName)
     {
-        // Pindahkan email di dalam folder yang dihapus kembali ke Kotak Masuk (Inbox)
         foreach ($this->emails as $index => $item) {
             if ($item['folder'] === $folderName) {
                 $this->emails[$index]['folder'] = 'inbox';
@@ -352,9 +361,45 @@ new class extends Component
         $this->moveToFolder('inbox');
     }
 
+    public function toggleSelectAll()
+    {
+        $currentIds = collect($this->emails)->where('folder', $this->activeFolder)->pluck('id')->toArray();
+        if (count($this->selectedIds) >= count($currentIds) && count($currentIds) > 0) {
+            $this->selectedIds = [];
+        } else {
+            $this->selectedIds = $currentIds;
+        }
+    }
+
+    public function deleteSelectedMultiple()
+    {
+        if (empty($this->selectedIds)) return;
+        foreach ($this->emails as $index => $item) {
+            if (in_array($item['id'], $this->selectedIds)) {
+                $this->emails[$index]['folder'] = 'trash';
+            }
+        }
+        $this->selectedIds = [];
+        $this->persistState();
+        session()->flash('webmail_msg', 'Pesan terpilih dipindahkan ke Sampah.');
+    }
+
+    public function markMultipleRead()
+    {
+        if (empty($this->selectedIds)) return;
+        foreach ($this->emails as $index => $item) {
+            if (in_array($item['id'], $this->selectedIds)) {
+                $this->emails[$index]['is_read'] = true;
+            }
+        }
+        $this->selectedIds = [];
+        $this->persistState();
+    }
+
     public function selectEmail($id)
     {
         $this->selectedEmailId = $id;
+        $this->viewMode = 'detail';
         $updated = false;
         foreach ($this->emails as &$item) {
             if ($item['id'] == $id && !$item['is_read']) {
@@ -647,21 +692,20 @@ new class extends Component
                            str_contains(strtolower($email['body']), $q);
                 });
             })
-            ->when($this->filterStarred, function ($collection) {
+            ->when($this->activeFilter === 'starred', function ($collection) {
                 return $collection->where('is_starred', true);
             })
-            ->when($this->filterUnread, function ($collection) {
+            ->when($this->activeFilter === 'unread', function ($collection) {
                 return $collection->where('is_read', false);
+            })
+            ->when($this->activeFilter === 'read', function ($collection) {
+                return $collection->where('is_read', true);
             })
             ->values();
 
-        $selectedEmail = collect($this->emails)->first(function ($item) {
+        $selectedEmail = $this->selectedEmailId ? collect($this->emails)->first(function ($item) {
             return (string)($item['id'] ?? '') === (string)$this->selectedEmailId;
-        }) ?? $filteredEmails->first() ?? (!empty($this->emails) ? $this->emails[0] : null);
-
-        if ($selectedEmail && $this->selectedEmailId !== $selectedEmail['id']) {
-            $this->selectedEmailId = $selectedEmail['id'];
-        }
+        }) : null;
 
         $counts = [
             'inbox' => collect($this->emails)->where('folder', 'inbox')->where('is_read', false)->count(),
@@ -879,240 +923,214 @@ new class extends Component
             </div>
         </div>
 
-        <!-- Kolom 2: Daftar Email Masuk + Search & Filter Bar -->
-        <div :class="mobileEmailOpen ? 'hidden md:flex' : 'flex'"
-             class="w-full md:w-80 lg:w-96 md:max-w-xs lg:max-w-sm border-r border-slate-800/80 bg-slate-950/40 flex-col shrink-0 overflow-hidden">
-            
-            <!-- Search & Quick Filter Bar -->
-            <div class="p-3 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md space-y-2.5 shrink-0">
-                <div class="relative">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-2.5 text-slate-400"></i>
-                    <input type="text" wire:model.live.debounce.200ms="searchQuery" placeholder="Cari pesan atau pengirim..." 
-                           class="w-full pl-9 pr-3.5 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-sans shadow-inner">
-                </div>
+        <!-- Kolom Konten Utama: Mode Daftar (Gmail/Hostinger List) vs Mode Detail Pesan -->
+        <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
 
-                <div class="flex items-center justify-between text-[11px]">
-                    <div class="flex items-center gap-1.5">
-                        <button wire:click="$toggle('filterUnread')" 
-                                class="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 {{ $filterUnread ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm' : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700' }}">
-                            <span class="w-1.5 h-1.5 rounded-full {{ $filterUnread ? 'bg-cyan-400' : 'bg-slate-500' }}"></span>
-                            Belum Dibaca
-                        </button>
-                        <button wire:click="$toggle('filterStarred')" 
-                                class="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1 {{ $filterStarred ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm' : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700' }}">
-                            <i data-lucide="star" class="w-3 h-3 {{ $filterStarred ? 'fill-amber-400 text-amber-400' : 'text-slate-500' }}"></i>
-                            Berbintang
-                        </button>
+            @if($viewMode === 'list')
+            <!-- ========================================== -->
+            <!-- 1. MODE DAFTAR EMAIL (GMAIL / HOSTINGER)    -->
+            <!-- ========================================== -->
+            <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden" wire:key="email-list-view">
+                
+                <!-- Sub-Header: Judul Folder, Filter Chips (All mail, Unread, Read, Starred) & Search -->
+                <div class="p-3.5 sm:px-6 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <h1 class="text-base sm:text-lg font-bold text-white capitalize flex items-center gap-2">
+                            <span>{{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}</span>
+                            @if(count($filteredEmails) > 0)
+                                <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
+                            @endif
+                        </h1>
+
+                        <!-- Filter Chips: All mail, Unread, Read, Starred (Gaya Hostinger/Gmail) -->
+                        <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
+                            <button wire:click="setFilter('all')"
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all {{ $activeFilter === 'all' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                Semua
+                            </button>
+                            <button wire:click="setFilter('unread')"
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all {{ $activeFilter === 'unread' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                Belum Dibaca
+                            </button>
+                            <button wire:click="setFilter('read')"
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all {{ $activeFilter === 'read' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                Sudah Dibaca
+                            </button>
+                            <button wire:click="setFilter('starred')"
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 {{ $activeFilter === 'starred' ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                <i data-lucide="star" class="w-3 h-3 {{ $activeFilter === 'starred' ? 'fill-slate-950' : 'text-amber-400' }}"></i>
+                                Berbintang
+                            </button>
+                        </div>
                     </div>
-                    <span class="text-[10px] text-slate-500 font-mono font-medium">{{ count($filteredEmails) }} pesan</span>
+
+                    <!-- Search Input memanjang & Quick Batch Actions -->
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                        <div class="relative flex-1 sm:w-64">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
+                            <input type="text" wire:model.live.debounce.200ms="searchQuery" placeholder="Cari pesan atau pengirim..." 
+                                   class="w-full pl-9 pr-3.5 py-1.5 bg-slate-950/80 border border-slate-700/80 rounded-full text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all shadow-inner">
+                        </div>
+
+                        @if($activeFolder === 'trash' && count($filteredEmails) > 0)
+                            <button wire:click="emptyTrash" wire:confirm="Kosongkan seluruh folder Sampah?" class="text-xs text-rose-400 hover:underline flex items-center gap-1 font-semibold shrink-0">
+                                <i data-lucide="trash" class="w-3.5 h-3.5"></i> Kosongkan Sampah
+                            </button>
+                        @elseif($activeFolder === 'spam' && count($filteredEmails) > 0)
+                            <button wire:click="emptySpam" wire:confirm="Hapus semua spam?" class="text-xs text-rose-400 hover:underline flex items-center gap-1 font-semibold shrink-0">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Spam
+                            </button>
+                        @endif
+                    </div>
                 </div>
 
-                @if($activeFolder === 'trash' && count($filteredEmails) > 0)
-                <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                    <span class="text-[10px] text-slate-400">Folder Sampah</span>
-                    <button wire:click="emptyTrash" 
-                            wire:confirm="Yakin ingin mengosongkan seluruh folder Sampah? Pesan tidak dapat dipulihkan kembali."
-                            class="text-[10px] text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1 font-semibold">
-                        <i data-lucide="trash" class="w-3 h-3"></i>
-                        Kosongkan Sampah
-                    </button>
-                </div>
-                @endif
+                <!-- Action Bar: Select All Checkbox & Bulk Operations -->
+                <div class="px-4 sm:px-6 py-2 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between text-xs text-slate-400 shrink-0">
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2 cursor-pointer" wire:click="toggleSelectAll">
+                            <input type="checkbox" 
+                                   class="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0 bg-slate-900 cursor-pointer"
+                                   {{ count($selectedIds) > 0 && count($selectedIds) >= count($filteredEmails) ? 'checked' : '' }}>
+                            <span class="text-[11px] font-medium text-slate-300">Pilih Semua</span>
+                        </div>
 
-                @if($activeFolder === 'spam' && count($filteredEmails) > 0)
-                <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                    <span class="text-[10px] text-slate-400">Folder Spam</span>
-                    <button wire:click="emptySpam" 
-                            wire:confirm="Yakin ingin menghapus semua pesan spam sekarang? Pesan akan dihapus secara permanen."
-                            class="text-[10px] text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1 font-semibold">
-                        <i data-lucide="trash-2" class="w-3 h-3"></i>
-                        Hapus Semua Spam
-                    </button>
-                </div>
-                @endif
-            </div>
+                        @if(count($selectedIds) > 0)
+                        <div class="flex items-center gap-2 animate-fade-in pl-2 border-l border-slate-800">
+                            <span class="text-[11px] font-semibold text-cyan-300 font-mono">{{ count($selectedIds) }} dipilih</span>
+                            <button wire:click="deleteSelectedMultiple" class="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                            </button>
+                            <button wire:click="markMultipleRead" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold flex items-center gap-1 transition-all">
+                                <i data-lucide="mail-open" class="w-3 h-3"></i> Tandai Dibaca
+                            </button>
+                        </div>
+                        @endif
+                    </div>
 
-            <!-- Email List Stream -->
-            <div class="flex-1 overflow-y-auto divide-y divide-slate-800/50">
-                @forelse($filteredEmails as $email)
-                <div wire:click="selectEmail({{ $email['id'] }})" @click="mobileEmailOpen = true"
-                     class="p-3.5 cursor-pointer transition-all border-l-4 relative group {{ $selectedEmailId == $email['id'] ? 'bg-gradient-to-r from-indigo-950/60 to-slate-900/60 border-cyan-400 shadow-sm' : 'border-transparent hover:bg-slate-900/50' }}">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <div class="flex items-center gap-2 truncate pr-2">
+                    <div class="text-[11px] font-mono text-slate-500">
+                        1 - {{ count($filteredEmails) }} dari {{ count($filteredEmails) }}
+                    </div>
+                </div>
+
+                <!-- Full-Width Email Rows Stream (Gmail / Hostinger Style) -->
+                <div class="flex-1 overflow-y-auto divide-y divide-slate-800/40">
+                    @forelse($filteredEmails as $email)
+                    <div wire:click="selectEmail({{ $email['id'] }})"
+                         class="group px-4 sm:px-6 py-3 cursor-pointer transition-colors flex items-center gap-3.5 hover:bg-slate-900/60 {{ $email['is_read'] ? 'bg-slate-950/20 text-slate-300' : 'bg-slate-900/30 text-white font-semibold' }}">
+                        
+                        <!-- Checkbox & Star (prevent parent click with @click.stop) -->
+                        <div class="flex items-center gap-2.5 shrink-0" @click.stop>
+                            <input type="checkbox" wire:model.live="selectedIds" value="{{ $email['id'] }}"
+                                   class="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0 bg-slate-900 cursor-pointer">
+                            <button wire:click="toggleStar({{ $email['id'] }})" class="p-1 text-slate-500 hover:text-amber-400 transition-colors">
+                                <i data-lucide="star" class="w-4 h-4 {{ $email['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                            </button>
+                        </div>
+
+                        <!-- Sender Name -->
+                        <div class="w-44 sm:w-56 shrink-0 truncate text-xs sm:text-sm flex items-center gap-2">
                             @if(!$email['is_read'])
                                 <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 ring-4 ring-cyan-400/20" title="Belum Dibaca"></span>
                             @else
-                                <span class="w-2 h-2 rounded-full bg-slate-700/60 shrink-0"></span>
+                                <span class="w-2 h-2 rounded-full bg-transparent shrink-0"></span>
                             @endif
-                            <span class="text-xs truncate {{ $email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white tracking-tight' }}">
+                            <span class="truncate {{ $email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white' }}">
                                 {{ $email['from_name'] }}
                             </span>
                         </div>
-                        <span class="text-[10px] text-slate-400 shrink-0 font-medium">{{ $email['date'] }}</span>
-                    </div>
 
-                    <div class="text-xs truncate flex items-center gap-1.5 mb-1 {{ $email['is_read'] ? 'font-normal text-slate-300' : 'font-semibold text-cyan-200' }}">
-                        @if($email['folder'] === 'drafts')
-                            <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">Draf</span>
-                        @endif
-                        @if($email['is_starred'])
-                            <i data-lucide="star" class="w-3 h-3 fill-amber-400 text-amber-400 shrink-0"></i>
-                        @endif
-                        <span class="truncate">{{ $email['subject'] }}</span>
-                    </div>
-
-                    <div class="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                        {{ Str::limit($email['body'], 75) }}
-                    </div>
-                </div>
-                @empty
-                <div class="p-10 text-center space-y-2">
-                    <div class="w-10 h-10 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
-                        <i data-lucide="mail-search" class="w-5 h-5"></i>
-                    </div>
-                    <p class="text-xs font-medium text-slate-400">Tidak ada pesan ditemukan</p>
-                    <p class="text-[11px] text-slate-500">Coba kata kunci lain atau pilih folder berbeda</p>
-                </div>
-                @endforelse
-            </div>
-        </div>
-
-        <!-- Kolom 3: Viewer Isi Email -->
-        <div :class="mobileEmailOpen ? 'flex' : 'hidden md:!flex'"
-             class="flex-1 bg-slate-950 flex flex-col min-w-0 h-full overflow-hidden md:!flex"
-             x-data="{ showInlineReply: false }"
-             wire:key="email-view-{{ $selectedEmailId }}">
-            @if($selectedEmail)
-            <!-- Mobile Back to List Button -->
-            <div class="md:hidden px-4 py-3 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
-                <button @click="mobileEmailOpen = false" class="flex items-center gap-1.5 text-xs text-cyan-400 font-semibold">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                    Kembali ke Daftar Pesan
-                </button>
-            </div>
-
-            <!-- Email Header: Modern Glassmorphic Card -->
-            <div class="px-5 py-4 sm:px-7 sm:py-4.5 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md shrink-0"
-                 x-data="{ showHeaderDetails: false, showMoveDropdown: false }"
-                 wire:key="header-{{ $selectedEmail['id'] }}">
-                <div class="flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-3">
-                    <!-- Left: Sender Info, Subject & Detail Toggle -->
-                    <div class="flex items-center gap-3.5 min-w-0">
-                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-extrabold text-sm shrink-0 shadow-lg shadow-indigo-600/25 ring-2 ring-white/10">
-                            {{ strtoupper(substr($selectedEmail['from_name'], 0, 1)) }}
+                        <!-- Subject & Body Preview (Full Width Inline) -->
+                        <div class="flex-1 min-w-0 flex items-center gap-2 text-xs sm:text-sm truncate pr-2">
+                            @if($email['folder'] === 'drafts')
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">Draf</span>
+                            @endif
+                            <span class="truncate {{ $email['is_read'] ? 'text-slate-200 font-normal' : 'text-white font-semibold' }}">
+                                {{ $email['subject'] }}
+                            </span>
+                            <span class="text-slate-500 font-normal truncate hidden md:inline">
+                                - {{ Str::limit(strip_tags($email['body']), 90) }}
+                            </span>
                         </div>
-                        <div class="min-w-0">
-                            <h2 class="text-base sm:text-lg font-bold text-white tracking-tight truncate">{{ $selectedEmail['subject'] }}</h2>
-                            <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-                                <span class="font-semibold text-slate-200 truncate">{{ $selectedEmail['from_name'] }}</span>
-                                <span class="text-slate-600">•</span>
-                                <span class="font-mono text-cyan-300/90 text-[11px] truncate">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
-                                
-                                <!-- Detail Toggle Button -->
-                                <button @click="showHeaderDetails = !showHeaderDetails" 
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-[10px] text-slate-400 hover:text-cyan-300 transition-colors border border-slate-700/60 ml-1">
-                                    <span>detail</span>
-                                    <i data-lucide="chevron-down" class="w-3 h-3 transition-transform duration-200" :class="showHeaderDetails ? 'rotate-180' : ''"></i>
+
+                        <!-- Attachments Icon & Date / Hover Action Buttons -->
+                        <div class="flex items-center gap-3 shrink-0 text-right">
+                            @if(!empty($email['attachments']))
+                                <i data-lucide="paperclip" class="w-3.5 h-3.5 text-slate-400" title="Memiliki Lampiran"></i>
+                            @endif
+
+                            <!-- Quick Action Buttons on Hover -->
+                            <div class="hidden group-hover:flex items-center gap-1" @click.stop>
+                                <button wire:click="toggleReadStatus({{ $email['id'] }})" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white" title="{{ $email['is_read'] ? 'Tandai Belum Dibaca' : 'Tandai Sudah Dibaca' }}">
+                                    <i data-lucide="{{ $email['is_read'] ? 'mail' : 'mail-open' }}" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <button wire:click="moveToFolder('trash')" class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400" title="Hapus">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
+
+                            <span class="group-hover:hidden text-[11px] text-slate-400 font-medium whitespace-nowrap">
+                                {{ $email['date'] }}
+                            </span>
                         </div>
                     </div>
+                    @empty
+                    <div class="p-16 text-center space-y-3">
+                        <div class="w-14 h-14 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+                            <i data-lucide="mail" class="w-7 h-7 stroke-1"></i>
+                        </div>
+                        <p class="text-sm font-semibold text-slate-300">Tidak ada pesan di folder ini</p>
+                        <p class="text-xs text-slate-500">Folder ini kosong atau tidak ada email yang cocok dengan kriteria pencarian.</p>
+                    </div>
+                    @endforelse
+                </div>
+            </div>
 
-                    <!-- Right: Action Bar & Date -->
-                    <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                        <span class="text-slate-400 text-xs font-medium hidden xl:inline-block mr-2 px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800">
-                            {{ $selectedEmail['date'] }}
-                        </span>
-                        
-                        @if($activeFolder === 'trash')
-                            <!-- Tombol Pulihkan dari Sampah -->
-                            <button wire:click="restoreFromTrash" 
-                                    class="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
-                                    title="Kembalikan ke Kotak Masuk">
-                                <i data-lucide="archive-restore" class="w-4 h-4"></i>
-                                <span>Kembalikan</span>
-                            </button>
+            @else
+            <!-- ========================================== -->
+            <!-- 2. MODE DETAIL PESAN (GMAIL / HOSTINGER)    -->
+            <!-- ========================================== -->
+            <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden" 
+                 x-data="{ showInlineReply: false }"
+                 wire:key="email-detail-view-{{ $selectedEmailId }}">
+                @if($selectedEmail)
+                <!-- Detail Header Toolbar: Back Button & Standard Email Actions -->
+                <div class="px-4 sm:px-6 py-3 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <!-- Tombol Kembali ke Daftar Pesan -->
+                        <button wire:click="backToList" 
+                                class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80 shadow-sm hover:scale-[1.02]">
+                            <i data-lucide="arrow-left" class="w-4 h-4 text-cyan-400"></i>
+                            <span>Kembali ke Daftar</span>
+                        </button>
 
-                            <!-- Hapus Permanen -->
-                            <button wire:click="deleteSelectedEmail" 
-                                    class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-2 transition-all"
-                                    title="Hapus Selamanya">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                <span>Hapus Selamanya</span>
-                            </button>
-                        @elseif($activeFolder === 'spam')
-                            <!-- Aksi Khusus Folder SPAM -->
-                            <button wire:click="markNotSpam" 
-                                    class="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-2 transition-all shadow-sm"
-                                    title="Tandai Bukan Spam dan Pindahkan ke Kotak Masuk">
-                                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-                                <span>Bukan Spam</span>
-                            </button>
+                        <div class="h-4 w-px bg-slate-800 hidden sm:block"></div>
 
-                            <button wire:click="deleteSelectedEmail" 
-                                    class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-2 transition-all"
-                                    title="Hapus Selamanya">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                <span>Hapus Selamanya</span>
-                            </button>
-                        @elseif($activeFolder === 'drafts')
-                            <!-- Aksi Khusus Folder DRAFTS -->
-                            <button wire:click="openDraft({{ $selectedEmail['id'] }})" 
-                                    class="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30"
-                                    title="Buka dan Lanjutkan Tulis Draf">
-                                <i data-lucide="edit-3" class="w-4 h-4"></i>
-                                <span>Lanjutkan Menulis</span>
-                            </button>
-
-                            <button wire:click="deleteSelectedEmail" 
-                                    class="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700/80 text-xs font-semibold flex items-center gap-1.5 transition-all"
-                                    title="Buang Draf Ini">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                <span>Buang Draf</span>
-                            </button>
-                        @else
-                            <!-- Standard Email Actions -->
-                            <button wire:click="toggleReadStatus({{ $selectedEmail['id'] }})" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-cyan-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
-                                    title="{{ $selectedEmail['is_read'] ? 'Tandai Belum Dibaca' : 'Tandai Sudah Dibaca' }}">
-                                <i data-lucide="{{ $selectedEmail['is_read'] ? 'mail' : 'mail-open' }}" class="w-4 h-4"></i>
-                            </button>
-
+                        <!-- Aksi Cepat Pesan -->
+                        <div class="flex items-center gap-1">
                             <button wire:click="toggleStar({{ $selectedEmail['id'] }})" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-amber-400 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors" 
                                     title="Bintang">
                                 <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
                             </button>
 
-                            <!-- Pindahkan ke Folder Dropdown -->
-                            <div class="relative">
-                                <button @click="showMoveDropdown = !showMoveDropdown" 
-                                        class="p-2 rounded-xl text-slate-400 hover:text-cyan-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
-                                        title="Pindahkan ke Folder">
-                                    <i data-lucide="folder-input" class="w-4 h-4"></i>
-                                </button>
-                                <div x-show="showMoveDropdown" @click.away="showMoveDropdown = false" 
-                                     class="absolute right-0 mt-2 w-48 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl py-1.5 text-xs z-30 space-y-0.5 backdrop-blur-xl" style="display: none;">
-                                    <div class="px-3.5 py-1 text-[10px] text-slate-400 uppercase font-bold border-b border-slate-800">Pindahkan Ke:</div>
-                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('inbox')" class="w-full text-left px-3.5 py-2 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-2.5">
-                                        <i data-lucide="inbox" class="w-3.5 h-3.5 text-cyan-400"></i> Kotak Masuk
-                                    </button>
-                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('spam')" class="w-full text-left px-3.5 py-2 hover:bg-slate-800 text-amber-400 hover:text-amber-300 flex items-center gap-2.5">
-                                        <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i> Tandai Spam
-                                    </button>
-                                    @foreach($customFolders as $cf)
-                                    <button @click="showMoveDropdown = false" wire:click="moveToFolder('{{ $cf }}')" class="w-full text-left px-3.5 py-2 hover:bg-slate-800 text-slate-300 hover:text-white flex items-center gap-2.5 truncate">
-                                        <i data-lucide="folder" class="w-3.5 h-3.5 text-cyan-400"></i> {{ $cf }}
-                                    </button>
-                                    @endforeach
-                                </div>
-                            </div>
-                            
-                            <!-- Balas Button -->
-                            <button @click="showInlineReply = !showInlineReply" 
-                                    class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/25">
-                                <i data-lucide="reply" class="w-3.5 h-3.5"></i>
-                                <span>Balas</span>
+                            <button wire:click="toggleReadStatus({{ $selectedEmail['id'] }})" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
+                                    title="Tandai Belum Dibaca">
+                                <i data-lucide="mail" class="w-4 h-4"></i>
+                            </button>
+
+                            @if($activeFolder !== 'trash')
+                            <button wire:click="deleteSelectedEmail" 
+                                    class="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" 
+                                    title="Pindahkan ke Sampah">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                            @else
+                            <button wire:click="restoreFromTrash" 
+                                    class="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                    title="Kembalikan ke Kotak Masuk">
+                                <i data-lucide="archive-restore" class="w-4 h-4"></i>
+                                <span>Kembalikan</span>
                             </button>
 
                             <button wire:click="forwardEmail" 
@@ -1128,50 +1146,62 @@ new class extends Component
                             </button>
                         @endif
                     </div>
+
+                    <!-- Right: Reply / Forward button in toolbar -->
+                    <div class="flex items-center gap-2">
+                        <button wire:click="replyEmail" 
+                                class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/25">
+                            <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+                            <span>Balas</span>
+                        </button>
+                        <button wire:click="forwardEmail" 
+                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80">
+                            <i data-lucide="forward" class="w-3.5 h-3.5"></i>
+                            <span>Teruskan</span>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Gmail-Style Detail Popover Card -->
-                <div x-show="showHeaderDetails" 
-                     @click.away="showHeaderDetails = false"
-                     x-transition:enter="transition ease-out duration-150"
-                     x-transition:enter-start="opacity-0 translate-y-1 scale-98"
-                     x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-                     class="mt-3.5 p-4 rounded-2xl bg-slate-950/95 border border-slate-700/80 shadow-2xl max-w-xl text-xs space-y-2.5 backdrop-blur-xl">
-                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline">
-                        <span class="text-slate-400 font-medium">Dari:</span>
-                        <div class="text-slate-200">
-                            <span class="font-bold">{{ $selectedEmail['from_name'] }}</span>
-                            <span class="text-cyan-300 font-mono text-[11px]">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                <!-- Subject & Sender Card (Gmail Style) -->
+                <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40 shrink-0" x-data="{ showHeaderDetails: false }">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">{{ $selectedEmail['subject'] }}</h2>
+                        <span class="text-xs text-slate-400 font-medium px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800">
+                            {{ $selectedEmail['date'] }}
+                        </span>
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md shadow-indigo-600/20">
+                                {{ strtoupper(substr($selectedEmail['from_name'], 0, 1)) }}
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 text-xs sm:text-sm">
+                                    <span class="font-bold text-white">{{ $selectedEmail['from_name'] }}</span>
+                                    <span class="font-mono text-cyan-300 text-xs hidden sm:inline">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                    <button @click="showHeaderDetails = !showHeaderDetails" class="text-[10px] text-slate-400 hover:text-cyan-300 underline ml-1">
+                                        detail
+                                    </button>
+                                </div>
+                                <div class="text-xs text-slate-400 mt-0.5">
+                                    Kepada: <span class="font-mono text-slate-300">{{ $selectedEmail['to'] }}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline">
-                        <span class="text-slate-400 font-medium">Kepada:</span>
-                        <span class="text-slate-200 font-mono">{{ $selectedEmail['to'] }}</span>
-                    </div>
-                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline">
-                        <span class="text-slate-400 font-medium">Tanggal:</span>
-                        <span class="text-slate-300">{{ $selectedEmail['date'] }}</span>
-                    </div>
-                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline">
-                        <span class="text-slate-400 font-medium">Subjek:</span>
-                        <span class="text-slate-200 font-semibold">{{ $selectedEmail['subject'] }}</span>
-                    </div>
-                    <div class="grid grid-cols-[80px_1fr] gap-2 items-baseline pt-2 border-t border-slate-800">
-                        <span class="text-slate-400 font-medium">Keamanan:</span>
-                        @if($activeFolder === 'spam')
-                            <div class="flex items-center gap-2 text-rose-400 font-mono text-[11px]">
-                                <i data-lucide="shield-alert" class="w-4 h-4"></i>
-                                <span>Unverified Sender • SPF FAIL • Skor Spam: {{ $selectedEmail['spam_score'] ?? '7.8' }}/10</span>
-                            </div>
-                        @else
-                            <div class="flex items-center gap-2 text-emerald-400 font-mono text-[11px]">
-                                <i data-lucide="shield-check" class="w-4 h-4"></i>
-                                <span>Enkripsi Standar (TLS/SSL) • SPF PASS • DKIM PASS</span>
-                            </div>
-                        @endif
+
+                    <!-- Collapsible Full Headers / Security Audit -->
+                    <div x-show="showHeaderDetails" x-collapse class="mt-3 p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 text-xs font-mono text-slate-400 space-y-1.5" style="display: none;">
+                        <div><strong class="text-slate-300">Dari:</strong> {{ $selectedEmail['from_name'] }} &lt;{{ $selectedEmail['from_email'] }}&gt;</div>
+                        <div><strong class="text-slate-300">Kepada:</strong> {{ $selectedEmail['to'] }}</div>
+                        <div><strong class="text-slate-300">Tanggal:</strong> {{ $selectedEmail['date'] }}</div>
+                        <div class="pt-1.5 border-t border-slate-800 text-emerald-400 flex items-center gap-1.5">
+                            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                            <span>Enkripsi Standar TLS • SPF PASS • DKIM PASS (Postfix & Dovecot)</span>
+                        </div>
                     </div>
                 </div>
-            </div>
 
             <!-- Gmail-Style Warning Banner Saat Berada di Folder SPAM -->
             @if($activeFolder === 'spam')
