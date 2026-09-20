@@ -655,7 +655,13 @@ new class extends Component
             })
             ->values();
 
-        $selectedEmail = collect($this->emails)->firstWhere('id', $this->selectedEmailId);
+        $selectedEmail = collect($this->emails)->first(function ($item) {
+            return (string)($item['id'] ?? '') === (string)$this->selectedEmailId;
+        }) ?? $filteredEmails->first() ?? (!empty($this->emails) ? $this->emails[0] : null);
+
+        if ($selectedEmail && $this->selectedEmailId !== $selectedEmail['id']) {
+            $this->selectedEmailId = $selectedEmail['id'];
+        }
 
         $counts = [
             'inbox' => collect($this->emails)->where('folder', 'inbox')->where('is_read', false)->count(),
@@ -872,7 +878,7 @@ new class extends Component
 
         <!-- Kolom 2: Daftar Email Masuk + Search & Filter Bar -->
         <div :class="mobileEmailOpen ? 'hidden md:flex' : 'flex'"
-             class="w-full md:w-88 lg:w-96 border-r border-slate-800/80 bg-slate-950/40 flex-col shrink-0 overflow-hidden">
+             class="w-full md:w-80 lg:w-96 md:max-w-xs lg:max-w-sm border-r border-slate-800/80 bg-slate-950/40 flex-col shrink-0 overflow-hidden">
             
             <!-- Search & Quick Filter Bar -->
             <div class="p-3 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md space-y-2.5 shrink-0">
@@ -969,8 +975,8 @@ new class extends Component
         </div>
 
         <!-- Kolom 3: Viewer Isi Email -->
-        <div :class="mobileEmailOpen ? 'flex' : 'hidden md:flex'"
-             class="flex-1 bg-slate-950 flex flex-col min-w-0 h-full overflow-hidden"
+        <div :class="mobileEmailOpen ? 'flex' : 'hidden md:!flex'"
+             class="flex-1 bg-slate-950 flex flex-col min-w-0 h-full overflow-hidden md:!flex"
              x-data="{ showInlineReply: false }"
              wire:key="email-view-{{ $selectedEmailId }}">
             @if($selectedEmail)
