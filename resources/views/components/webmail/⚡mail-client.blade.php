@@ -3,6 +3,8 @@
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use App\Models\VirtualUser;
+use App\Models\MailboxEmail;
+use App\Models\MailboxFolder;
 
 new class extends Component
 {
@@ -119,15 +121,64 @@ new class extends Component
     {
         $this->currentAccount = auth('mailbox')->user() ?? VirtualUser::first();
 
-        // Restore custom folders and emails state from session if available
-        if (session()->has('webmail_custom_folders')) {
-            $this->customFolders = session('webmail_custom_folders');
-        }
+        if ($this->currentAccount) {
+            // 1. Muat folder kustom permanen dari database
+            $dbFolders = MailboxFolder::where('virtual_user_id', $this->currentAccount->id)->pluck('name')->toArray();
+            if (empty($dbFolders)) {
+                // Inisialisasi folder bawaan jika baru pertama kali
+                foreach (['Klien Prioritas', 'Tagihan & Invoice'] as $f) {
+                    MailboxFolder::create([
+                        'virtual_user_id' => $this->currentAccount->id,
+                        'name' => $f,
+                    ]);
+                }
+                $this->customFolders = ['Klien Prioritas', 'Tagihan & Invoice'];
+            } else {
+                $this->customFolders = $dbFolders;
+            }
 
-        if (session()->has('webmail_emails')) {
-            $this->emails = session('webmail_emails');
-        } else {
-            session(['webmail_emails' => $this->emails]);
+            // 2. Muat email permanen dari database
+            $dbEmails = MailboxEmail::where('virtual_user_id', $this->currentAccount->id)->get();
+            if ($dbEmails->isEmpty()) {
+                // Simpan email awal ke database permanen agar tidak pernah hilang saat logout
+                foreach ($this->emails as $seedMail) {
+                    MailboxEmail::create([
+                        'virtual_user_id' => $this->currentAccount->id,
+                        'folder' => $seedMail['folder'],
+                        'from_name' => $seedMail['from_name'],
+                        'from_email' => $seedMail['from_email'],
+                        'to' => $seedMail['to'],
+                        'subject' => $seedMail['subject'],
+                        'date_human' => $seedMail['date'],
+                        'is_read' => $seedMail['is_read'],
+                        'is_starred' => $seedMail['is_starred'],
+                        'body' => $seedMail['body'],
+                        'attachments' => $seedMail['attachments'] ?? [],
+                        'spam_reason' => $seedMail['spam_reason'] ?? null,
+                        'spam_score' => $seedMail['spam_score'] ?? null,
+                    ]);
+                }
+                $dbEmails = MailboxEmail::where('virtual_user_id', $this->currentAccount->id)->get();
+            }
+
+            // Map data dari database ke array state Livewire
+            $this->emails = $dbEmails->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'folder' => $item->folder,
+                    'from_name' => $item->from_name,
+                    'from_email' => $item->from_email,
+                    'to' => $item->to,
+                    'subject' => $item->subject,
+                    'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
+                    'is_read' => (bool) $item->is_read,
+                    'is_starred' => (bool) $item->is_starred,
+                    'body' => $item->body,
+                    'attachments' => $item->attachments ?: [],
+                    'spam_reason' => $item->spam_reason,
+                    'spam_score' => $item->spam_score,
+                ];
+            })->toArray();
         }
 
         // Tandai email default yang sedang terpilih sebagai terbaca (is_read = true)
@@ -166,13 +217,62 @@ new class extends Component
 
     protected function persistState()
     {
-        session([
-            'webmail_emails' => $this->emails,
-            'webmail_custom_folders' => $this->customFolders,
-        ]);
-
-        // Sinkronkan ke database akun user aktif agar kapasitas selalu akurat dengan data email nyata
+        // Simpan langsung ke database secara permanen (tahan logout & multi-device)
         if ($this->currentAccount) {
+            // 1. Sinkronkan Folder Kustom
+            MailboxFolder::where('virtual_user_id', $this->currentAccount->id)->delete();
+            foreach ($this->customFolders as $folderName) {
+                MailboxFolder::create([
+                    'virtual_user_id' => $this->currentAccount->id,
+                    'name' => $folderName,
+                ]);
+            }
+
+            // 2. Sinkronkan seluruh data Email dan Status (Read, Star, Folder, Draf)
+            $existingDbIds = collect($this->emails)->pluck('id')->filter()->toArray();
+            // Hapus email di database yang sudah dihapus permanen di UI
+            MailboxEmail::where('virtual_user_id', $this->currentAccount->id)
+                ->whereNotIn('id', $existingDbIds)
+                ->delete();
+
+            foreach ($this->emails as $mail) {
+                if (isset($mail['id']) && MailboxEmail::where('id', $mail['id'])->where('virtual_user_id', $this->currentAccount->id)->exists()) {
+                    MailboxEmail::where('id', $mail['id'])->update([
+                        'folder' => $mail['folder'],
+                        'is_read' => $mail['is_read'],
+                        'is_starred' => $mail['is_starred'],
+                        'to' => $mail['to'],
+                        'subject' => $mail['subject'],
+                        'body' => $mail['body'],
+                        'attachments' => $mail['attachments'] ?? [],
+                    ]);
+                } else {
+                    $created = MailboxEmail::create([
+                        'virtual_user_id' => $this->currentAccount->id,
+                        'folder' => $mail['folder'],
+                        'from_name' => $mail['from_name'] ?? ($this->currentAccount->name ?: 'Administrator'),
+                        'from_email' => $mail['from_email'] ?? ($this->currentAccount->email ?: 'admin@perusahaan.net.id'),
+                        'to' => $mail['to'],
+                        'subject' => $mail['subject'],
+                        'date_human' => $mail['date'] ?? 'Baru saja',
+                        'is_read' => $mail['is_read'] ?? true,
+                        'is_starred' => $mail['is_starred'] ?? false,
+                        'body' => $mail['body'] ?? '',
+                        'attachments' => $mail['attachments'] ?? [],
+                        'spam_reason' => $mail['spam_reason'] ?? null,
+                        'spam_score' => $mail['spam_score'] ?? null,
+                    ]);
+                    // Update ID di memori
+                    foreach ($this->emails as &$memMail) {
+                        if ($memMail['subject'] === $mail['subject'] && $memMail['body'] === $mail['body']) {
+                            $memMail['id'] = $created->id;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 3. Update kalkulasi kapasitas storage di tabel virtual_users
             $actualBytes = $this->calculateActualEmailsBytes();
             $this->currentAccount->syncMaildirDiskUsage($actualBytes);
         }

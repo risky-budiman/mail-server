@@ -161,10 +161,17 @@
         <header class="h-14 md:h-16 px-4 md:px-8 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/40 backdrop-blur-md sticky top-0 z-20 shrink-0">
             <div class="flex items-center gap-2">
                 <span class="hidden sm:inline text-xs font-medium text-slate-400">Mode:</span>
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    Simulation Dev
-                </span>
+                @if(app()->environment('production'))
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Production Live</span>
+                    </span>
+                @else
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                        <span>Development</span>
+                    </span>
+                @endif
             </div>
 
             <div class="flex items-center gap-3">

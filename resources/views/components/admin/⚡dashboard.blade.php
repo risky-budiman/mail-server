@@ -62,11 +62,11 @@ new class extends Component
 
     <!-- Stats Grid Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <!-- Card 1: Virtual Domains -->
+        <!-- Card 1: Domain Bisnis -->
         <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md relative overflow-hidden group hover:border-slate-700 transition-all">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Virtual Domains</p>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Domain Bisnis</p>
                     <p class="text-3xl font-extrabold text-white mt-2">{{ $domainCount }}</p>
                 </div>
                 <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -75,9 +75,9 @@ new class extends Component
             </div>
             <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
                 <span class="text-emerald-400 font-semibold flex items-center gap-0.5">
-                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Siap routing
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Siap Pakai
                 </span>
-                <span>ke Postfix MX</span>
+                <span>• Terhubung ke Mail Server</span>
             </div>
         </div>
 
@@ -85,7 +85,7 @@ new class extends Component
         <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md relative overflow-hidden group hover:border-slate-700 transition-all">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Mailboxes</p>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Akun Email</p>
                     <p class="text-3xl font-extrabold text-white mt-2">{{ $userCount }}</p>
                 </div>
                 <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -94,7 +94,7 @@ new class extends Component
             </div>
             <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
                 <span class="text-emerald-400 font-medium">{{ $activeUserCount }} Aktif</span>
-                <span>• Dovecot IMAP sync</span>
+                <span>• Siap Login Webmail & HP</span>
             </div>
         </div>
 
@@ -102,7 +102,7 @@ new class extends Component
         <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md relative overflow-hidden group hover:border-slate-700 transition-all">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Aliases & Forward</p>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Alias & Pengalihan</p>
                     <p class="text-3xl font-extrabold text-white mt-2">{{ $aliasCount }}</p>
                 </div>
                 <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
@@ -110,7 +110,7 @@ new class extends Component
                 </div>
             </div>
             <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
-                <span class="text-cyan-400 font-medium">Virtual alias maps</span>
+                <span class="text-cyan-400 font-medium">Forwarding Otomatis Aktif</span>
             </div>
         </div>
 
@@ -118,7 +118,7 @@ new class extends Component
         <div class="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md relative overflow-hidden group hover:border-slate-700 transition-all">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Storage Terpakai</p>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Penyimpanan Terpakai</p>
                     <p class="text-3xl font-extrabold text-white mt-2">{{ $usedStorageGB }} <span class="text-base font-medium text-slate-400">/ {{ $totalStorageGB }} GB</span></p>
                 </div>
                 <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
@@ -132,7 +132,7 @@ new class extends Component
                 </div>
                 <div class="flex justify-between items-center text-[11px] text-slate-400 mt-1">
                     <span>{{ $storageUsagePercent }}% Terpakai</span>
-                    <span>Format Maildir</span>
+                    <span class="text-emerald-400 font-medium">Penyimpanan Terisolasi Aman</span>
                 </div>
             </div>
         </div>
@@ -231,8 +231,8 @@ new class extends Component
                         <i data-lucide="check" class="w-3.5 h-3.5"></i>
                     </div>
                     <div>
-                        <p class="font-semibold text-white">Database Virtual Mailbox</p>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Tabel virtual_domains, virtual_users, dan virtual_aliases sudah aktif & terstruktur.</p>
+                        <p class="font-semibold text-white">Database Mail Server Siap</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Tabel domain, akun pengguna, dan pengalihan email sudah aktif & terstruktur.</p>
                     </div>
                 </div>
 
