@@ -148,16 +148,28 @@ cd /var/www/mailids
 
 ### B. Cara Menjalankan Instalasi Mail Engine (Pilih Salah Satu)
 
-Anda memiliki **2 pilihan cara yang sangat mudah**:
+Anda memiliki **3 pilihan cara yang sangat fleksibel**:
 
-#### Opsi 1: Menggunakan Tombol Menu Web Portal (Sangat Mudah & Praktis)
-1. Buka Web Portal Admin Anda di browser: `http://IP_VPS_ANDA/admin/login`
-2. Klik menu **"1-Click Server Installer"** di bilah navigasi kiri.
-3. Masukkan domain bisnis Anda dan klik tombol **"Jalankan Instalasi Mail Engine Sekarang"**.
-4. Konsol log interaktif di layar akan menampilkan proses instalasi Postfix, Dovecot, OpenDKIM, dan Firewall secara real-time sampai selesai.
+#### Pilihan 1: Jalankan Perintah Paket Manual (Jika Ingin Install Paket Satu per Satu)
+Jika Anda ingin melihat atau mengeksekusi langsung paket instalasi Postfix & Dovecot dari apt:
+```bash
+# 1. Update repositori
+sudo apt-get update -y
 
-#### Opsi 2: Eksekusi Manual via Terminal SSH
-Jika Anda lebih menyukai baris perintah terminal langsung:
+# 2. Install Postfix & Modul MySQL
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix postfix-mysql
+
+# 3. Install Dovecot Core, IMAP, POP3, LMTP & Driver MySQL
+sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql
+
+# 4. Install OpenDKIM & Firewall UFW
+sudo apt-get install -y opendkim opendkim-tools ufw
+```
+
+---
+
+#### Pilihan 2: Eksekusi Skrip Otomasi Terpadu (Direkomendasikan - Paling Cepat & Akurat)
+Skrip `setup-mail-server.sh` di dalam folder proyek sudah merangkum seluruh perintah `apt-get` di atas sekaligus **mengonfigurasi file Postfix (`main.cf`), Dovecot (`dovecot-sql.conf.ext`), Maildir storage (`/var/vmail/`), dan OpenDKIM** secara otomatis dalam 1 menit:
 ```bash
 # Berikan izin eksekusi
 chmod +x scripts/setup-mail-server.sh
@@ -167,13 +179,23 @@ sudo DOMAIN="perusahaan.co.id" DB_PASS="StrongSecretPassword123!" bash scripts/s
 ```
 > **Catatan:** Ganti `perusahaan.co.id` dengan domain bisnis asli Anda, dan `StrongSecretPassword123!` dengan password user MySQL `mailuser` yang Anda buat pada Langkah 1.
 
-**Komponen Mail Server Lengkap yang Diinstal & Dikonfigurasi Otomatis:**
+---
+
+#### Pilihan 3: Menggunakan Tombol Menu Web Portal (1-Click UI)
+1. Buka Web Portal Admin Anda di browser: `http://IP_VPS_ANDA/admin/login`
+2. Klik menu **"1-Click Server Installer"** di bilah navigasi kiri.
+3. Masukkan domain bisnis Anda dan klik tombol **"Jalankan Instalasi Mail Engine Sekarang"**.
+4. Konsol log interaktif di layar akan menampilkan proses instalasi Postfix, Dovecot, OpenDKIM, dan Firewall secara real-time sampai selesai.
+
+---
+
+**Rincian Komponen Paket Mail Server yang Diinstal:**
 1. **Postfix (MTA Engine):**
    - Menangani pengiriman (*outbound*) dan penerimaan (*inbound*) email di port 25, 587, dan 465.
    - Terintegrasi dengan modul `postfix-mysql` untuk membaca akun dan domain langsung dari database.
 2. **Dovecot (IMAP/POP3 & SASL Auth):**
-   - Paket `dovecot-imapd`, `dovecot-pop3d`, dan `dovecot-lmtpd`.
-   - Mengelola kotak surat (*Maildir*) dan sinkronisasi email ke Thunderbird, Outlook, dan smartphone di port 993 (SSL).
+   - Paket `dovecot-core`, `dovecot-imapd`, `dovecot-pop3d`, dan `dovecot-lmtpd`.
+   - Mengelola kotak surat (*Maildir*) dan sinkronisasi email ke Thunderbird, Outlook, smartphone, dan Webmail di port 993 (SSL).
    - Menyediakan jembatan autentikasi SASL socket (`/var/spool/postfix/private/auth`) agar Postfix hanya mengizinkan pengiriman email dari user yang memiliki akun terdaftar.
 3. **OpenDKIM & OpenDKIM-Tools:**
    - Menandatangani (*digital signature*) setiap email keluar dengan kunci kriptografi RSA agar tidak dianggap email penipuan/spoofing oleh Google Gmail dan Yahoo.

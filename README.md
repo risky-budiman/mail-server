@@ -1,59 +1,74 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 📬 MailIDS — Self-Hosted Enterprise Mail Server & Webmail Portal
 
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+  <img src="https://img.shields.io/badge/Laravel-12.x-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel 12" />
+  <img src="https://img.shields.io/badge/Livewire-v4_SPA-4e56a6?style=for-the-badge&logo=livewire&logoColor=white" alt="Livewire 4" />
+  <img src="https://img.shields.io/badge/Postfix-MTA_Engine-blue?style=for-the-badge&logo=linux&logoColor=white" alt="Postfix" />
+  <img src="https://img.shields.io/badge/Dovecot-IMAP_POP3-green?style=for-the-badge&logo=linux&logoColor=white" alt="Dovecot" />
+  <img src="https://img.shields.io/badge/Security-SPF_DKIM_DMARC-00b4d8?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Email Security" />
 </p>
 
-## About Laravel
+Sistem Mail Server mandiri (*self-hosted*) berstandar industri berbasis Linux (Postfix & Dovecot) dengan antarmuka ganda (**Web Portal Admin** dan **Webmail Client Modern**) bertenaga Laravel 12 & Livewire SPA.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 🌟 Fitur Utama
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 1. Web Portal Admin (Manajemen Server)
+* **Multi-Domain Virtual Hosting:** Kelola banyak domain bisnis dalam satu server mail (`virtual_domains`).
+* **Akun Email & Kuota Terpusat:** Buat mailbox pengguna dengan alokasi kuota penyimpanan dinamis (MB/GB) dan hash password kompatibel Dovecot (`BLF-CRYPT/BCRYPT`).
+* **Alias & Forwarding:** Pengalihan email otomatis antar-alamat internal maupun eksternal.
+* **Generator DNS Record:** Pembuat panduan instan A Record, MX, SPF, DKIM (OpenDKIM 2048-bit), DMARC, dan Reverse DNS (PTR).
+* **Simulator Deliverability (Mail-Tester 10/10):** Uji kesiapan DNS secara nyata (*Live DNS Query*) untuk memastikan email masuk ke Primary Inbox Gmail/Outlook.
+* **1-Click Server Installer & Log Monitor:** Setup otomatis Postfix/Dovecot di VPS dan pemantau log realtime `/var/log/mail.log`.
 
-## Learning Laravel
+### 2. Webmail Client (Pengguna Mailbox)
+* **Desain 3-Kolom Modern:** Terinspirasi dari estetika Gmail & Hostinger Webmail dalam antarmuka gelap (*Dark Mode Glassmorphism*).
+* **Dukungan Draf Cerdas:** Penyimpanan otomatis saat modal ditutup, lanjutkan draf lama, buang draf (*discard*), dan notifikasi badge Draf.
+* **Manajemen SPAM Transparan:** Banner penjelasan alasan spam ala Gmail dengan kalkulasi skor reputasi pengirim, tombol *"Bukan Spam"*, *"Hapus Selamanya"*, dan *"Kosongkan Semua Spam"*.
+* **Folder Kustom Dinamis:** Buat dan hapus folder kustom kapan saja dengan fitur proteksi migrasi otomatis email kembali ke Kotak Masuk.
+* **Indikator Storage Real-Time:** Menghitung ukuran fisik Maildir aktual dan memberi peringatan saat kuota mendekati penuh.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🚀 Panduan Deployment VPS Linux
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+Panduan lengkap instalasi di server VPS Ubuntu (22.04 / 24.04 LTS), mulai dari spesifikasi VPS, setup port 25, instalasi Postfix, Dovecot, OpenDKIM, SSL Let's Encrypt, hingga konfigurasi DNS dapat dibaca langsung di:
 
-## Agentic Development
+👉 **[BACA PANDUAN DEPLOYMENT VPS LENGKAP (DEPLOYMENT_VPS_GUIDE.md)](DEPLOYMENT_VPS_GUIDE.md)**
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+---
 
-```bash
-composer require laravel/boost --dev
+## 💻 Instalasi Lokal (Development / Demo)
 
-php artisan boost:install
-```
+1. **Clone repository:**
+   ```bash
+   git clone https://github.com/risky-budiman/mail-server.git
+   cd mail-server
+   ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+2. **Install Dependensi PHP & JS:**
+   ```bash
+   composer install
+   npm install
+   npm run build
+   ```
 
-## Contributing
+3. **Setup Environment:**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   php artisan migrate --seed
+   ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+4. **Jalankan Aplikasi:**
+   ```bash
+   php artisan serve
+   ```
+   * Portal Admin: `http://localhost:8000/admin/login` (Akun: `admin@mailportal.local` / `Secret123!`)
+   * Webmail: `http://localhost:8000/webmail/login` (Akun: `admin@perusahaan.net.id` / `Secret123!`)
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# mail-server
+## 📄 Lisensi
+Proyek ini dilisensikan di bawah lisensi [MIT](LICENSE).
