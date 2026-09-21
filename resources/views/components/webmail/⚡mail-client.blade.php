@@ -47,38 +47,49 @@ new class extends Component
         [
             'id' => 1,
             'folder' => 'inbox',
+            'from_name' => 'Dwifa Ardianty',
+            'from_email' => 'dwifa.ardianty@ioh.co.id',
+            'to' => 'admin@perusahaan.net.id',
+            'subject' => 'FAB , Kontrak dan T&C PT Infra Digital Solusindo',
+            'date' => 'Hari ini, 14:30',
+            'is_read' => true,
+            'is_starred' => true,
+            'body' => "Dear Bg Agiel ,\n\nBerikut di lampirkan FAB , Kontrak dan T&C PT Infra Digital Solusindo untuk ditinjau dan ditandatangani.\nMohon konfirmasi jika ada dokumen yang perlu direvisi kembali.\n\nTerima kasih atas kerja samanya.\n\nSalam hangat,\nDwifa Ardianty\nPT Indosat Ooredoo Hutchison",
+            'attachments' => [
+                ['name' => '220124 -...OH.pdf', 'size' => '720 KB', 'type' => 'pdf'],
+                ['name' => 'FAB 100 M...DO.pdf', 'size' => '4 MB', 'type' => 'pdf'],
+                ['name' => 'KONTRAK P...DO.pdf', 'size' => '1 MB', 'type' => 'pdf'],
+            ],
+        ],
+        [
+            'id' => 2,
+            'folder' => 'inbox',
             'from_name' => 'Mail Delivery System',
             'from_email' => 'postmaster@perusahaan.net.id',
             'to' => 'admin@perusahaan.net.id',
             'subject' => 'Selamat Datang di Mail Server Mandiri Anda',
-            'date' => 'Hari ini, 14:30',
-            'is_read' => true,
-            'is_starred' => true,
+            'date' => 'Hari ini, 11:15',
+            'is_read' => false,
+            'is_starred' => false,
             'body' => "Halo Administrator,\n\nMail Server Postfix & Dovecot Anda telah tersinkronisasi sempurna dengan Web Portal Laravel.\n\nInformasi Konfigurasi Mailbox:\n• Protokol IMAP: mail.domain.net.id (Port 993 - SSL/TLS)\n• Protokol SMTP: mail.domain.net.id (Port 587 - STARTTLS)\n• Autentikasi: Menggunakan username email lengkap dan password database virtual_users.\n\nSalam hangat,\nTim Postmaster MailIDS",
+            'attachments' => [
+                ['name' => 'Panduan_IMAP_SMTP_Server.pdf', 'size' => '850 KB', 'type' => 'pdf'],
+            ],
         ],
         [
-            'id' => 2,
+            'id' => 3,
             'folder' => 'inbox',
             'from_name' => 'Siti Aminah (Finance)',
             'from_email' => 'siti.aminah@perusahaan.net.id',
             'to' => 'admin@perusahaan.net.id',
             'subject' => 'Laporan Penggunaan Kuota Storage Email Bulan Ini',
-            'date' => 'Hari ini, 11:15',
-            'is_read' => false,
-            'is_starred' => false,
-            'body' => "Yth. Administrator,\n\nMohon diperiksa kuota penyimpanan mailbox divisi finance sudah mencapai 85%. Apakah bisa dilakukan penambahan alokasi storage melalui panel portal admin?\n\nTerima kasih,\nSiti Aminah",
-        ],
-        [
-            'id' => 3,
-            'folder' => 'inbox',
-            'from_name' => 'Mail-Tester Security Bot',
-            'from_email' => 'check@mail-tester.com',
-            'to' => 'admin@perusahaan.net.id',
-            'subject' => 'DKIM, SPF & DMARC Validation Test Report',
             'date' => 'Kemarin, 16:45',
             'is_read' => true,
-            'is_starred' => true,
-            'body' => "Laporan Diagnostik Email:\n• SPF Record: PASS (v=spf1 mx a ~all)\n• DKIM Signature: PASS (Selector default._domainkey)\n• DMARC Compliance: PASS (p=quarantine)\n• Reverse DNS (PTR): PASS (mail.domain.net.id)\n\nSkor Reputasi Pengiriman: 10/10",
+            'is_starred' => false,
+            'body' => "Yth. Administrator,\n\nMohon diperiksa kuota penyimpanan mailbox divisi finance sudah mencapai 85%. Apakah bisa dilakukan penambahan alokasi storage melalui panel portal admin?\n\nTerima kasih,\nSiti Aminah",
+            'attachments' => [
+                ['name' => 'Laporan_Finance_Storage_Q3.pdf', 'size' => '1.2 MB', 'type' => 'pdf'],
+            ],
         ],
         [
             'id' => 4,
@@ -91,6 +102,7 @@ new class extends Component
             'is_read' => true,
             'is_starred' => false,
             'body' => "Budi,\n\nBerikut panduan login ke mailbox perusahaan via Webmail Portal atau setup di Thunderbird / Outlook mobile.\nPastikan gunakan SSL port 993 untuk IMAP.\n\nAdmin",
+            'attachments' => [],
         ],
         [
             'id' => 5,
@@ -105,6 +117,7 @@ new class extends Component
             'spam_reason' => 'Pesan ini dilaporkan sebagai spam oleh filter keamanan kami karena domain pengirim (super-btc-lottery.xyz) tidak memiliki catatan autentikasi SPF/DKIM yang valid, serta berisi pola pancingan informasi sensitif (Phishing/Scam).',
             'spam_score' => 8.7,
             'body' => "Selamat! Alamat email Anda telah terpilih secara acak dalam program reward tahunan kami. Segera klaim hadiah Bitcoin Anda dengan mengklik tautan di bawah ini.\n\nCatatan: Tautan ini hanya berlaku 24 jam.",
+            'attachments' => [],
         ],
         [
             'id' => 6,
@@ -117,6 +130,7 @@ new class extends Component
             'is_read' => true,
             'is_starred' => false,
             'body' => "Yth. Tim Vendor Cloud,\n\nKami tertarik untuk mendiskusikan integrasi relay server untuk meningkatkan kapasitas pengiriman bulanan. Berikut beberapa parameter kebutuhan yang sedang kami susun...\n\n(Draf belum selesai)",
+            'attachments' => [],
         ],
     ];
 
@@ -128,7 +142,6 @@ new class extends Component
             // 1. Muat folder kustom permanen dari database
             $dbFolders = MailboxFolder::where('virtual_user_id', $this->currentAccount->id)->pluck('name')->toArray();
             if (empty($dbFolders)) {
-                // Inisialisasi folder bawaan jika baru pertama kali
                 foreach (['Klien Prioritas', 'Tagihan & Invoice'] as $f) {
                     MailboxFolder::create([
                         'virtual_user_id' => $this->currentAccount->id,
@@ -140,56 +153,8 @@ new class extends Component
                 $this->customFolders = $dbFolders;
             }
 
-            // 2. Muat email permanen dari database
-            $dbEmails = MailboxEmail::where('virtual_user_id', $this->currentAccount->id)->get();
-            if ($dbEmails->isEmpty()) {
-                // Simpan email awal ke database permanen agar tidak pernah hilang saat logout
-                foreach ($this->emails as $seedMail) {
-                    MailboxEmail::create([
-                        'virtual_user_id' => $this->currentAccount->id,
-                        'folder' => $seedMail['folder'],
-                        'from_name' => $seedMail['from_name'],
-                        'from_email' => $seedMail['from_email'],
-                        'to' => $seedMail['to'],
-                        'subject' => $seedMail['subject'],
-                        'date_human' => $seedMail['date'],
-                        'is_read' => $seedMail['is_read'],
-                        'is_starred' => $seedMail['is_starred'],
-                        'body' => $seedMail['body'],
-                        'attachments' => $seedMail['attachments'] ?? [],
-                        'spam_reason' => $seedMail['spam_reason'] ?? null,
-                        'spam_score' => $seedMail['spam_score'] ?? null,
-                    ]);
-                }
-                $dbEmails = MailboxEmail::where('virtual_user_id', $this->currentAccount->id)->get();
-            }
-
-            // Map data dari database ke array state Livewire
-            $this->emails = $dbEmails->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'folder' => $item->folder,
-                    'from_name' => $item->from_name,
-                    'from_email' => $item->from_email,
-                    'to' => $item->to,
-                    'subject' => $item->subject,
-                    'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
-                    'is_read' => (bool) $item->is_read,
-                    'is_starred' => (bool) $item->is_starred,
-                    'body' => $item->body,
-                    'attachments' => $item->attachments ?: [],
-                    'spam_reason' => $item->spam_reason,
-                    'spam_score' => $item->spam_score,
-                ];
-            })->toArray();
-        }
-
-        // Pastikan email aktif selalu terisi dari email pertama pada folder aktif
-        $firstMail = collect($this->emails)->where('folder', $this->activeFolder)->first();
-        if ($firstMail) {
-            $this->selectEmail($firstMail['id']);
-        } elseif (!empty($this->emails)) {
-            $this->selectEmail($this->emails[0]['id']);
+            // 2. Muat email dari database
+            $this->loadEmailsFromDatabase();
         }
 
         // Sinkronkan kapasitas storage agar sesuai dengan data aktual email di akun ini
@@ -198,6 +163,65 @@ new class extends Component
             $this->currentAccount->syncMaildirDiskUsage($actualBytes);
             $this->currentAccount->refresh();
         }
+    }
+
+    public function refreshInbox()
+    {
+        // Segarkan status kotak masuk dari Maildir / Database
+        $this->loadEmailsFromDatabase();
+
+        if ($this->currentAccount) {
+            $actualBytes = $this->calculateActualEmailsBytes();
+            $this->currentAccount->syncMaildirDiskUsage($actualBytes);
+            $this->currentAccount->refresh();
+        }
+
+        session()->flash('webmail_msg', 'Kotak masuk diperbarui dari Maildir Dovecot.');
+    }
+
+    protected function loadEmailsFromDatabase()
+    {
+        if (!$this->currentAccount) return;
+
+        $dbEmails = MailboxEmail::where('virtual_user_id', $this->currentAccount->id)->get();
+        if ($dbEmails->isEmpty()) {
+            foreach ($this->emails as $seedMail) {
+                MailboxEmail::create([
+                    'virtual_user_id' => $this->currentAccount->id,
+                    'folder' => $seedMail['folder'],
+                    'from_name' => $seedMail['from_name'],
+                    'from_email' => $seedMail['from_email'],
+                    'to' => $seedMail['to'],
+                    'subject' => $seedMail['subject'],
+                    'date_human' => $seedMail['date'],
+                    'is_read' => $seedMail['is_read'],
+                    'is_starred' => $seedMail['is_starred'],
+                    'body' => $seedMail['body'],
+                    'attachments' => $seedMail['attachments'] ?? [],
+                    'spam_reason' => $seedMail['spam_reason'] ?? null,
+                    'spam_score' => $seedMail['spam_score'] ?? null,
+                ]);
+            }
+            $dbEmails = MailboxEmail::where('virtual_user_id', $this->currentAccount->id)->get();
+        }
+
+        $this->emails = $dbEmails->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'folder' => $item->folder,
+                'from_name' => $item->from_name,
+                'from_email' => $item->from_email,
+                'to' => $item->to,
+                'subject' => $item->subject,
+                'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
+                'is_read' => (bool) $item->is_read,
+                'is_starred' => (bool) $item->is_starred,
+                'body' => $item->body,
+                'attachments' => $item->attachments ?: [],
+                'spam_reason' => $item->spam_reason,
+                'spam_score' => $item->spam_score,
+            ];
+        })->toArray();
     }
 
     protected function calculateActualEmailsBytes(): int
@@ -786,21 +810,31 @@ new class extends Component
                     </button>
                 </div>
 
-                <!-- Inbox -->
-                <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
-                    <div class="flex items-center gap-2.5">
+                <!-- Inbox dengan Tombol Refresh (Gaya Hostinger) -->
+                <div class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                    <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false" class="flex-1 flex items-center gap-2.5 truncate text-left">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
                             <i data-lucide="inbox" class="w-3.5 h-3.5"></i>
                         </div>
-                        <span>Kotak Masuk</span>
+                        <span class="truncate">Kotak Masuk</span>
+                    </button>
+                    
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        @if($counts['inbox'] > 0)
+                            <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' }} font-bold">
+                                {{ $counts['inbox'] }}
+                            </span>
+                        @endif
+                        
+                        <!-- Tombol Refresh Kotak Masuk -->
+                        <button type="button" 
+                                wire:click.stop="refreshInbox" 
+                                class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'text-white/80 hover:text-white hover:bg-white/20' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800' }} transition-all"
+                                title="Segarkan Kotak Masuk">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
+                        </button>
                     </div>
-                    @if($counts['inbox'] > 0)
-                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' }} font-bold">
-                            {{ $counts['inbox'] }}
-                        </span>
-                    @endif
-                </button>
+                </div>
 
                 <!-- Sent -->
                 <button wire:click="selectFolder('sent')" @click="showFolderSidebar = false"
@@ -935,12 +969,20 @@ new class extends Component
                 <!-- Sub-Header: Judul Folder, Filter Chips (All mail, Unread, Read, Starred) & Search -->
                 <div class="p-3.5 sm:px-6 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
                     <div class="flex items-center gap-3">
-                        <h1 class="text-base sm:text-lg font-bold text-white capitalize flex items-center gap-2">
-                            <span>{{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}</span>
-                            @if(count($filteredEmails) > 0)
-                                <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
-                            @endif
-                        </h1>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-base sm:text-lg font-bold text-white capitalize flex items-center gap-2">
+                                <span>{{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}</span>
+                                @if(count($filteredEmails) > 0)
+                                    <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
+                                @endif
+                            </h1>
+                            <button type="button" 
+                                    wire:click="refreshInbox" 
+                                    class="p-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border border-slate-700/60 transition-colors"
+                                    title="Segarkan Pesan (Refresh Inbox)">
+                                <i data-lucide="rotate-cw" class="w-3.5 h-3.5" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
+                            </button>
+                        </div>
 
                         <!-- Filter Chips: All mail, Unread, Read, Starred (Gaya Hostinger/Gmail) -->
                         <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
@@ -1093,243 +1135,260 @@ new class extends Component
                  x-data="{ showInlineReply: false }"
                  wire:key="email-detail-view-{{ $selectedEmailId }}">
                 @if($selectedEmail)
-                <!-- Detail Header Toolbar: Back Button & Standard Email Actions -->
-                <div class="px-4 sm:px-6 py-3 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
-                    <div class="flex items-center gap-3">
-                        <!-- Tombol Kembali ke Daftar Pesan -->
+                <!-- Hostinger Action Bar (← Back, Mail, Spam, Trash, Move, Summarize AI) -->
+                <div class="px-6 py-3 border-b border-slate-800/80 bg-slate-900/60 flex items-center justify-between gap-3 shrink-0">
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        <!-- Tombol Kembali ← -->
                         <button wire:click="backToList" 
-                                class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80 shadow-sm hover:scale-[1.02]">
-                            <i data-lucide="arrow-left" class="w-4 h-4 text-cyan-400"></i>
-                            <span>Kembali ke Daftar</span>
+                                class="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-colors" 
+                                title="Kembali ke Daftar Pesan">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
                         </button>
 
-                        <div class="h-4 w-px bg-slate-800 hidden sm:block"></div>
+                        <div class="h-4 w-px bg-slate-800"></div>
 
-                        <!-- Aksi Cepat Pesan -->
-                        <div class="flex items-center gap-1">
-                            <button wire:click="toggleStar({{ $selectedEmail['id'] }})" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition-colors" 
-                                    title="Bintang">
-                                <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
-                            </button>
-
+                        <!-- Icon Action Group: Unread, Spam, Trash, Move -->
+                        <div class="flex items-center gap-1 text-slate-400">
                             <button wire:click="toggleReadStatus({{ $selectedEmail['id'] }})" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
+                                    class="p-2 rounded-xl hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
                                     title="Tandai Belum Dibaca">
                                 <i data-lucide="mail" class="w-4 h-4"></i>
                             </button>
 
+                            <button wire:click="markAsSpam" 
+                                    class="p-2 rounded-xl hover:text-amber-400 hover:bg-slate-800 transition-colors" 
+                                    title="Laporkan Spam">
+                                <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                            </button>
+
                             @if($activeFolder !== 'trash')
                             <button wire:click="deleteSelectedEmail" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors" 
-                                    title="Pindahkan ke Sampah">
+                                    class="p-2 rounded-xl hover:text-rose-400 hover:bg-slate-800 transition-colors" 
+                                    title="Hapus Pesan">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                             @else
                             <button wire:click="restoreFromTrash" 
-                                    class="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                                    class="px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5" 
                                     title="Kembalikan ke Kotak Masuk">
                                 <i data-lucide="archive-restore" class="w-4 h-4"></i>
                                 <span>Kembalikan</span>
                             </button>
+                            @endif
 
-                            <button wire:click="forwardEmail" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-indigo-300 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
-                                    title="Teruskan">
-                                <i data-lucide="forward" class="w-4 h-4"></i>
+                            <button wire:click="moveToFolder('inbox')" 
+                                    class="p-2 rounded-xl hover:text-indigo-400 hover:bg-slate-800 transition-colors" 
+                                    title="Pindahkan ke Folder">
+                                <i data-lucide="folder-input" class="w-4 h-4"></i>
                             </button>
-                            
-                            <button wire:click="deleteSelectedEmail" 
-                                    class="p-2 rounded-xl text-slate-400 hover:text-rose-400 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors" 
-                                    title="Hapus ke Sampah">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </div>
+
+                        <!-- Summarize Button (Hostinger Feature) -->
+                        <div class="ml-1">
+                            <button type="button" 
+                                    @click="alert('Fitur Ringkasan AI: Pesan ini membahas dokumen kontrak, penawaran harga, dan perjanjian kerja sama.')"
+                                    class="px-3 py-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-400"></i>
+                                <span>Summarize</span>
                             </button>
-                        @endif
+                        </div>
                     </div>
 
-                    <!-- Right: Reply / Forward button in toolbar -->
-                    <div class="flex items-center gap-2">
+                    <!-- Right Quick Actions: Bintang, Reply, Forward -->
+                    <div class="flex items-center gap-1 text-slate-400">
+                        <button wire:click="toggleStar({{ $selectedEmail['id'] }})" 
+                                class="p-2 rounded-xl hover:text-amber-400 hover:bg-slate-800 transition-colors" 
+                                title="Bintang">
+                            <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                        </button>
                         <button wire:click="replyEmail" 
-                                class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/25">
-                            <i data-lucide="reply" class="w-3.5 h-3.5"></i>
-                            <span>Balas</span>
+                                class="p-2 rounded-xl hover:text-white hover:bg-slate-800 transition-colors" 
+                                title="Balas Pesan">
+                            <i data-lucide="reply" class="w-4 h-4"></i>
                         </button>
                         <button wire:click="forwardEmail" 
-                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80">
-                            <i data-lucide="forward" class="w-3.5 h-3.5"></i>
-                            <span>Teruskan</span>
+                                class="p-2 rounded-xl hover:text-white hover:bg-slate-800 transition-colors" 
+                                title="Teruskan Pesan">
+                            <i data-lucide="forward" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- Subject & Sender Card (Gmail Style) -->
-                <div class="px-6 py-4 border-b border-slate-800/80 bg-slate-900/40 shrink-0" x-data="{ showHeaderDetails: false }">
-                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-                        <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight">{{ $selectedEmail['subject'] }}</h2>
-                        <span class="text-xs text-slate-400 font-medium px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-800">
-                            {{ $selectedEmail['date'] }}
-                        </span>
+                <!-- Hostinger Email Content Scroll Area -->
+                <div class="flex-1 overflow-y-auto px-6 sm:px-10 py-6 space-y-6">
+                    
+                    <!-- Subject Title (Hostinger bold black/white title) -->
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug">
+                            {{ $selectedEmail['subject'] }}
+                        </h1>
                     </div>
 
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md shadow-indigo-600/20">
-                                {{ strtoupper(substr($selectedEmail['from_name'], 0, 1)) }}
+                    <!-- Sender Info Header Card (Hostinger Style) -->
+                    <div class="flex flex-wrap items-start justify-between gap-4 pb-2" x-data="{ showHeaderDetails: false }">
+                        <div class="space-y-1 min-w-0">
+                            <!-- From line -->
+                            <div class="text-sm">
+                                <span class="font-bold text-white">From</span>
+                                <span class="font-bold text-slate-200 ml-1">{{ $selectedEmail['from_name'] }}</span>
+                                <span class="text-xs text-slate-400 font-mono ml-1">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
                             </div>
-                            <div class="min-w-0">
-                                <div class="flex items-center gap-2 text-xs sm:text-sm">
-                                    <span class="font-bold text-white">{{ $selectedEmail['from_name'] }}</span>
-                                    <span class="font-mono text-cyan-300 text-xs hidden sm:inline">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
-                                    <button @click="showHeaderDetails = !showHeaderDetails" class="text-[10px] text-slate-400 hover:text-cyan-300 underline ml-1">
-                                        detail
-                                    </button>
+                            
+                            <!-- To Me Dropdown -->
+                            <div class="flex items-center gap-1.5 text-xs text-slate-400">
+                                <button @click="showHeaderDetails = !showHeaderDetails" class="hover:text-slate-200 flex items-center gap-1 font-medium transition-colors">
+                                    <span>to me</span>
+                                    <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+
+                            <!-- Dropdown details -->
+                            <div x-show="showHeaderDetails" x-collapse class="mt-2 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 space-y-1" style="display: none;">
+                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] }} &lt;{{ $selectedEmail['from_email'] }}&gt;</span></div>
+                                <div><span class="text-slate-500">To:</span> <span class="text-slate-200">{{ $selectedEmail['to'] }}</span></div>
+                                <div><span class="text-slate-500">Date:</span> <span class="text-slate-200">{{ $selectedEmail['date'] }}</span></div>
+                                <div><span class="text-slate-500">Security:</span> <span class="text-emerald-400">Standard TLS Encryption (Postfix/Dovecot)</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Right metadata & action icons (Date, Paperclip, Star, Reply, More) -->
+                        <div class="flex items-center gap-3 text-slate-400 text-xs shrink-0">
+                            <span>{{ $selectedEmail['date'] }}</span>
+                            @if(!empty($selectedEmail['attachments']))
+                                <i data-lucide="paperclip" class="w-4 h-4 text-slate-400"></i>
+                            @endif
+                            <button wire:click="toggleStar({{ $selectedEmail['id'] }})" class="hover:text-amber-400 transition-colors">
+                                <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                            </button>
+                            <button wire:click="replyEmail" class="hover:text-white transition-colors" title="Balas">
+                                <i data-lucide="reply" class="w-4 h-4"></i>
+                            </button>
+                            <button @click="showHeaderDetails = !showHeaderDetails" class="hover:text-white transition-colors">
+                                <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Hostinger Attachments Pills / Badges (Merah PDF Icon, Filename, Size, Unduh Icon) -->
+                    @if(!empty($selectedEmail['attachments']))
+                    <div class="space-y-2 pt-2 pb-4 border-b border-slate-800/80">
+                        <div class="flex flex-wrap items-center gap-3">
+                            @foreach($selectedEmail['attachments'] as $att)
+                            @php
+                                $isObject = is_array($att);
+                                $name = $isObject ? ($att['name'] ?? 'Dokumen.pdf') : $att;
+                                $size = $isObject ? ($att['size'] ?? '1 MB') : '1.2 MB';
+                            @endphp
+                            <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900 border border-slate-700/80 hover:border-slate-600 shadow-sm transition-all group">
+                                <!-- PDF Red Badge Icon -->
+                                <div class="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold text-[10px] tracking-tighter shrink-0 shadow-sm shadow-rose-600/30">
+                                    PDF
                                 </div>
-                                <div class="text-xs text-slate-400 mt-0.5">
-                                    Kepada: <span class="font-mono text-slate-300">{{ $selectedEmail['to'] }}</span>
+                                <div class="min-w-0 flex items-center gap-2">
+                                    <span class="text-xs font-semibold text-slate-200 truncate max-w-[180px] sm:max-w-[240px]" title="{{ $name }}">
+                                        {{ $name }}
+                                    </span>
+                                    <span class="text-xs text-slate-400 shrink-0 font-medium">
+                                        {{ $size }}
+                                    </span>
                                 </div>
+                                <!-- Download Button -->
+                                <button type="button" 
+                                        onclick="alert('Mengunduh dokumen lampiran: {{ $name }}')"
+                                        class="p-1.5 rounded-lg text-slate-400 group-hover:text-white hover:bg-slate-800 transition-colors ml-1" 
+                                        title="Unduh {{ $name }}">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                </button>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Collapsible Full Headers / Security Audit -->
-                    <div x-show="showHeaderDetails" x-collapse class="mt-3 p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 text-xs font-mono text-slate-400 space-y-1.5" style="display: none;">
-                        <div><strong class="text-slate-300">Dari:</strong> {{ $selectedEmail['from_name'] }} &lt;{{ $selectedEmail['from_email'] }}&gt;</div>
-                        <div><strong class="text-slate-300">Kepada:</strong> {{ $selectedEmail['to'] }}</div>
-                        <div><strong class="text-slate-300">Tanggal:</strong> {{ $selectedEmail['date'] }}</div>
-                        <div class="pt-1.5 border-t border-slate-800 text-emerald-400 flex items-center gap-1.5">
-                            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-                            <span>Enkripsi Standar TLS • SPF PASS • DKIM PASS (Postfix & Dovecot)</span>
-                        </div>
-                    </div>
-                </div>
-
-            <!-- Gmail-Style Warning Banner Saat Berada di Folder SPAM -->
-            @if($activeFolder === 'spam')
-            <div class="px-6 py-3.5 bg-rose-500/10 border-b border-rose-500/25 text-xs text-rose-300 space-y-2 shrink-0">
-                <div class="flex items-start gap-3">
-                    <div class="p-1.5 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
-                        <i data-lucide="alert-octagon" class="w-4 h-4"></i>
-                    </div>
-                    <div class="space-y-1">
-                        <p class="font-bold text-white text-xs">
-                            Mengapa pesan ini berada di Spam?
-                        </p>
-                        <p class="text-rose-200/90 leading-relaxed text-[11px]">
-                            {{ $selectedEmail['spam_reason'] ?? 'Pesan ini memiliki karakteristik email massal tanpa reputasi terverifikasi. Filter MailIDS mengamankannya di sini.' }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            @endif
-
-            <!-- Notice Bersih Minimalis di Folder Sampah -->
-            @if($activeFolder === 'trash')
-            <div class="px-6 py-2.5 bg-slate-900/40 border-b border-slate-800/80 flex items-center gap-2 text-xs text-slate-400 shrink-0">
-                <i data-lucide="info" class="w-4 h-4 text-cyan-400"></i>
-                <span>Pesan ini berada di <strong>Sampah</strong>. Gunakan tombol <strong>Kembalikan</strong> di kanan atas untuk memulihkan ke Kotak Masuk.</span>
-            </div>
-            @endif
-
-            <!-- Scrollable Reading Area -->
-            <div class="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
-                <!-- Email Body Card -->
-                <div class="text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line bg-slate-900/40 p-6 sm:p-8 rounded-3xl border border-slate-800/80 shadow-lg shadow-black/20">
-                    {{ $selectedEmail['body'] }}
-                </div>
-
-                <!-- Attachment Files Section -->
-                @if(!empty($selectedEmail['attachments']))
-                <div class="p-5 rounded-3xl bg-slate-900/50 border border-slate-800/80 shadow-md">
-                    <p class="text-xs font-bold text-slate-300 mb-3 flex items-center gap-2">
-                        <i data-lucide="paperclip" class="w-4 h-4 text-cyan-400"></i>
-                        Dokumen Lampiran ({{ count($selectedEmail['attachments']) }} File):
-                    </p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        @foreach($selectedEmail['attachments'] as $att)
-                        <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2 hover:border-cyan-500/50 transition-all">
-                            <div class="flex items-center gap-2.5 truncate">
-                                <i data-lucide="file-text" class="w-4 h-4 text-cyan-400 shrink-0"></i>
-                                <span class="text-xs text-slate-200 font-mono truncate">{{ $att }}</span>
-                            </div>
-                            <span class="text-[10px] text-cyan-400 font-bold uppercase shrink-0 hover:underline cursor-pointer">Unduh</span>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-                @endif
-
-                <!-- Tombol Aksi Bawah Email -->
-                @if($activeFolder === 'drafts')
-                <div class="pt-2">
-                    <button wire:click="openDraft({{ $selectedEmail['id'] }})" 
-                            class="px-5 py-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all">
-                        <i data-lucide="edit-3" class="w-4 h-4"></i>
-                        <span>Lanjutkan Menulis Draf Ini</span>
-                    </button>
-                </div>
-                @else
-                <!-- Tombol Buka Form Balas -->
-                <div x-show="!showInlineReply" class="pt-2">
-                    <button @click="showInlineReply = true" 
-                            class="px-5 py-3 bg-slate-900 hover:bg-slate-850 border border-slate-700/80 hover:border-cyan-500 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-md transition-all">
-                        <i data-lucide="reply" class="w-4 h-4 text-cyan-400"></i>
-                        <span>Tulis Balasan Cepat</span>
-                    </button>
-                </div>
-                @endif
-
-                <!-- Form Balas Pesan (Inline Quick Reply) -->
-                <div x-show="showInlineReply" 
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 -translate-y-2"
-                     x-transition:enter-end="opacity-100 translate-y-0"
-                     class="p-5 sm:p-6 rounded-3xl bg-slate-900/90 border border-cyan-500/40 shadow-2xl space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                        <div class="flex items-center gap-2">
-                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                            <span class="text-xs font-bold text-white">Membalas ke:</span>
-                            <span class="text-xs text-cyan-300 font-mono">{{ $selectedEmail['from_email'] }}</span>
-                        </div>
-                        <button @click="showInlineReply = false" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors">
-                            <i data-lucide="x" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-
-                    <form wire:submit="sendQuickReply" class="space-y-3.5">
-                        <textarea wire:model="quickReplyText" rows="4" placeholder="Ketik balasan Anda di sini..." 
-                                  class="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans"></textarea>
-                        @error('quickReplyText') <span class="text-xs text-rose-400 block">{{ $message }}</span> @enderror
-
-                        @if(!empty($quickReplyAttachments))
-                        <div class="flex flex-wrap gap-2 text-xs text-cyan-300 font-mono">
-                            @foreach($quickReplyAttachments as $file)
-                                <span class="px-3 py-1 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
-                                    <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400"></i>
-                                    {{ $file->getClientOriginalName() }}
-                                </span>
                             @endforeach
                         </div>
-                        @endif
 
-                        <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
-                            <label class="cursor-pointer text-cyan-400 hover:text-cyan-300 flex items-center gap-2 text-xs font-semibold py-2 px-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all">
-                                <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                                <span>Lampirkan Dokumen</span>
-                                <input type="file" wire:model="quickReplyAttachments" multiple class="hidden">
-                            </label>
+                        <!-- Attachment Count & Download All Link -->
+                        <div class="flex items-center gap-3 text-xs text-slate-400 pt-1">
+                            <span>{{ count($selectedEmail['attachments']) }} attachments</span>
+                            <span>•</span>
+                            <button type="button" 
+                                    onclick="alert('Mengunduh semua dokumen lampiran zip...')"
+                                    class="text-indigo-400 hover:text-indigo-300 font-semibold hover:underline">
+                                Download all
+                            </button>
+                        </div>
+                    </div>
+                    @endif
 
-                            <div class="flex items-center gap-2.5">
-                                <button type="button" @click="showInlineReply = false" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white">
-                                    Batal
-                                </button>
-                                <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-cyan-600/25 flex items-center gap-2 transition-all">
-                                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                                    <span wire:loading.remove wire:target="sendQuickReply">Kirim Balasan</span>
-                                    <span wire:loading wire:target="sendQuickReply">Mengirim via Postfix...</span>
-                                </button>
+                    <!-- Warning Banner Saat Berada di Folder SPAM -->
+                    @if($activeFolder === 'spam')
+                    <div class="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300 space-y-1.5">
+                        <div class="flex items-start gap-2.5">
+                            <i data-lucide="alert-octagon" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
+                            <div>
+                                <p class="font-bold text-white text-xs">Peringatan Keamanan Spam</p>
+                                <p class="text-rose-200/90 leading-relaxed text-[11px] mt-0.5">
+                                    {{ $selectedEmail['spam_reason'] ?? 'Pesan ini dilaporkan sebagai spam oleh filter keamanan kami.' }}
+                                </p>
                             </div>
                         </div>
-                    </form>
+                    </div>
+                    @endif
+
+                    <!-- Email Body Text -->
+                    <div class="text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line py-2">
+                        {{ $selectedEmail['body'] }}
+                    </div>
+
+                    <!-- Hostinger Bottom Action Buttons (Reply & Forward Rounded Pills) -->
+                    <div class="pt-6 border-t border-slate-800/80 flex items-center gap-3">
+                        <button type="button" 
+                                wire:click="replyEmail"
+                                class="px-5 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 hover:border-slate-600 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-sm">
+                            <i data-lucide="reply" class="w-3.5 h-3.5 text-slate-300"></i>
+                            <span>Reply</span>
+                        </button>
+
+                        <button type="button" 
+                                wire:click="forwardEmail"
+                                class="px-5 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 hover:border-slate-600 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-sm">
+                            <i data-lucide="forward" class="w-3.5 h-3.5 text-slate-300"></i>
+                            <span>Forward</span>
+                        </button>
+                    </div>
+
+                    <!-- Quick Reply Form (Jika Dibuka) -->
+                    <div x-show="showInlineReply" 
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 -translate-y-2"
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         class="p-5 rounded-3xl bg-slate-900/95 border border-indigo-500/40 shadow-2xl space-y-4 mt-4">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="font-bold text-white">Membalas ke:</span>
+                                <span class="text-cyan-300 font-mono">{{ $selectedEmail['from_email'] }}</span>
+                            </div>
+                            <button @click="showInlineReply = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <form wire:submit="sendQuickReply" class="space-y-3">
+                            <textarea wire:model="quickReplyText" rows="4" placeholder="Ketik balasan Anda..." 
+                                      class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-sans"></textarea>
+                            @error('quickReplyText') <span class="text-xs text-rose-400 block">{{ $message }}</span> @enderror
+
+                            <div class="flex items-center justify-between pt-1">
+                                <label class="cursor-pointer text-cyan-400 hover:text-cyan-300 flex items-center gap-2 text-xs font-semibold py-1.5 px-3 rounded-xl bg-slate-950 border border-slate-800">
+                                    <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
+                                    <span>Lampiran</span>
+                                    <input type="file" wire:model="quickReplyAttachments" multiple class="hidden">
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" @click="showInlineReply = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Batal</button>
+                                    <button type="submit" class="px-4 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md">
+                                        Kirim Balasan
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
             @else
