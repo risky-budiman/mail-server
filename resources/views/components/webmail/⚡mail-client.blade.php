@@ -1025,28 +1025,36 @@ new class extends Component
             ->orderBy('id', 'desc')
             ->get(['id', 'folder', 'from_name', 'from_email', 'to', 'subject', 'body', 'date_human', 'is_read', 'is_starred', 'attachments', 'spam_reason', 'spam_score', 'created_at']);
 
-        // Grouping Thread Percakapan (Gaya Gmail: 1 Thread = 1 Baris dengan Badge Angka Jumlah Pesan)
+        // Grouping Thread Percakapan: Hanya gabungkan jika SUBJEK SAMA DAN LAWAN BICARA (KONTAK) SAMA
         $groupedThreads = [];
         foreach ($rawEmailList as $item) {
             $normSubj = strtolower(trim(preg_replace('/^(Re:\s*|Fwd:\s*)+/i', '', $item->subject)));
-            if (empty($normSubj)) {
-                $normSubj = 'single_' . $item->id;
+            if (empty($normSubj) || $normSubj === '(tanpa subjek)') {
+                $threadKey = 'single_' . $item->id;
+            } else {
+                // Tentukan lawan bicara: Jika di folder sent pakai 'to', selain itu pakai 'from_email'
+                $contact = strtolower(trim($item->folder === 'sent' ? ($item->to ?: '') : ($item->from_email ?: '')));
+                // Bersihkan alamat email jika ada format "Nama <email>"
+                if (preg_match('/<([^>]+)>/', $contact, $cm)) {
+                    $contact = strtolower(trim($cm[1]));
+                }
+                $threadKey = $contact . '::' . $normSubj;
             }
 
-            if (!isset($groupedThreads[$normSubj])) {
-                $groupedThreads[$normSubj] = [
+            if (!isset($groupedThreads[$threadKey])) {
+                $groupedThreads[$threadKey] = [
                     'primary' => $item,
                     'count' => 1,
                     'has_unread' => !(bool)$item->is_read,
                     'has_starred' => (bool)$item->is_starred,
                 ];
             } else {
-                $groupedThreads[$normSubj]['count']++;
+                $groupedThreads[$threadKey]['count']++;
                 if (!$item->is_read) {
-                    $groupedThreads[$normSubj]['has_unread'] = true;
+                    $groupedThreads[$threadKey]['has_unread'] = true;
                 }
                 if ($item->is_starred) {
-                    $groupedThreads[$normSubj]['has_starred'] = true;
+                    $groupedThreads[$threadKey]['has_starred'] = true;
                 }
             }
         }
@@ -1095,14 +1103,23 @@ new class extends Component
                     'spam_score' => $rawSelected->spam_score,
                 ];
 
-                // Temukan seluruh thread percakapan (Conversation Thread Tree) berdasarkan subject dan korespondensi
+                // Temukan seluruh thread percakapan HANYA yang melibatkan KONTAK YANG SAMA dan SUBJEK YANG SAMA
                 $cleanSubj = trim(preg_replace('/^(Re:\s*|Fwd:\s*)+/i', '', $rawSelected->subject));
-                if (!empty($cleanSubj)) {
-                    $otherParty = ($rawSelected->folder === 'sent') ? $rawSelected->to : $rawSelected->from_email;
-                    
+                if (!empty($cleanSubj) && strtolower($cleanSubj) !== '(tanpa subjek)') {
+                    $otherParty = strtolower(trim($rawSelected->folder === 'sent' ? ($rawSelected->to ?: '') : ($rawSelected->from_email ?: '')));
+                    if (preg_match('/<([^>]+)>/', $otherParty, $opm)) {
+                        $otherParty = strtolower(trim($opm[1]));
+                    }
+
                     $threadList = MailboxEmail::where('virtual_user_id', $user->id)
                         ->where(function ($q) use ($cleanSubj) {
                             $q->where('subject', 'like', "%{$cleanSubj}%");
+                        })
+                        ->where(function ($q) use ($otherParty) {
+                            if (!empty($otherParty)) {
+                                $q->where('from_email', 'like', "%{$otherParty}%")
+                                  ->orWhere('to', 'like', "%{$otherParty}%");
+                            }
                         })
                         ->orderBy('id', 'asc')
                         ->get();
