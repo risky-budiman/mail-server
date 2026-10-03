@@ -134,16 +134,27 @@ new class extends Component
 
                 // Gunakan hash nama file unik sebagai identitas
                 $fileKey = md5("{$user->id}_{$file}");
-                $exists = MailboxEmail::where('virtual_user_id', $user->id)
+                $existingRecord = MailboxEmail::where('virtual_user_id', $user->id)
                     ->where('body', 'like', "%[UID:{$fileKey}]%")
-                    ->exists();
-
-                if ($exists) continue;
+                    ->first();
 
                 $rawContent = @file_get_contents($fullFile);
                 if (!$rawContent) continue;
 
                 $parsed = $this->parseRawRfc822Email($rawContent);
+
+                if ($existingRecord) {
+                    // Jika email sudah pernah disimpan tetapi masih memuat teks boundary berantakan, perbarui sekarang
+                    if (str_contains($existingRecord->body, 'Content-Type: text/')) {
+                        $existingRecord->update([
+                            'from_name' => $parsed['from_name'] ?: $existingRecord->from_name,
+                            'from_email' => $parsed['from_email'] ?: $existingRecord->from_email,
+                            'subject' => $parsed['subject'] ?: $existingRecord->subject,
+                            'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
+                        ]);
+                    }
+                    continue;
+                }
 
                 MailboxEmail::create([
                     'virtual_user_id' => $user->id,
@@ -238,9 +249,18 @@ new class extends Component
      */
     protected function extractCleanMimeBody(string $headers, string $body): string
     {
+        $boundary = null;
+
         // 1. Cari MIME boundary dari header
         if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $headers, $bMatch)) {
             $boundary = trim($bMatch[1]);
+        } 
+        // 2. Fallback: Cari pola boundary langsung di dalam body jika header terpotong (misal: --000000000000d133a0065cf19036)
+        elseif (preg_match('/--([a-zA-Z0-9_\-\.\/=]{15,})/m', $body, $bMatch)) {
+            $boundary = trim($bMatch[1]);
+        }
+
+        if ($boundary) {
             $delimiter = '--' . $boundary;
             $parts = explode($delimiter, $body);
 
@@ -272,6 +292,8 @@ new class extends Component
                     $htmlPart = trim($subContent);
                 } elseif (stripos($subHeader, 'text/plain') !== false) {
                     $textPart = trim($subContent);
+                } elseif (!$htmlPart && !$textPart && !empty($subContent)) {
+                    $textPart = trim($subContent);
                 }
             }
 
@@ -284,7 +306,7 @@ new class extends Component
             }
         }
 
-        // 2. Jika bukan multipart ber-boundary, periksa encoding biasa
+        // 3. Jika bukan multipart ber-boundary, periksa encoding biasa
         if (stripos($headers, 'Content-Transfer-Encoding: base64') !== false) {
             $decoded = base64_decode(preg_replace('/\s+/', '', $body));
             if ($decoded) return $decoded;
@@ -292,7 +314,12 @@ new class extends Component
             return quoted_printable_decode($body);
         }
 
-        return trim($body);
+        // 4. Jika masih tersisa pola boundary di dalam body, bersihkan dengan regex
+        $cleaned = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $body);
+        $cleaned = preg_replace('/Content-Type:\s*[^;\r\n]+(;\s*charset=[^;\r\n]+)?/i', '', $cleaned);
+        $cleaned = preg_replace('/Content-Transfer-Encoding:\s*[^\r\n]+/i', '', $cleaned);
+
+        return trim($cleaned) ?: trim($body);
     }
 
     protected function seedInitialEmailsIfEmpty()
