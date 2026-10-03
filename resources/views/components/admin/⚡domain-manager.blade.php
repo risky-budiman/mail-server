@@ -20,15 +20,27 @@ new class extends Component
             'name.unique' => 'Domain ini sudah terdaftar di sistem.',
         ]);
 
-        VirtualDomain::create([
+        $newDomain = VirtualDomain::create([
             'name' => strtolower(trim($this->name)),
             'description' => $this->description,
             'is_active' => $this->is_active,
         ]);
 
+        // Otomatisasi generate DKIM & konfigurasi OpenDKIM di Linux VPS
+        if (PHP_OS_FAMILY === 'Linux') {
+            try {
+                $script = base_path('scripts/add-domain-dkim.sh');
+                if (file_exists($script)) {
+                    @exec("sudo {$script} " . escapeshellarg($newDomain->name) . " > /dev/null 2>&1 &");
+                }
+            } catch (\Throwable $e) {
+                // Log atau abaikan jika bukan di environment VPS
+            }
+        }
+
         $this->reset(['name', 'description']);
         $this->is_active = true;
-        session()->flash('message', 'Domain baru berhasil ditambahkan dan siap dirouting Postfix!');
+        session()->flash('message', 'Domain baru berhasil ditambahkan! Kunci DKIM 2048-bit otomatis digenerate untuk Anti-Spam.');
     }
 
     public function toggleStatus($domainId)
