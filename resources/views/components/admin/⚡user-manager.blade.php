@@ -16,6 +16,48 @@ new class extends Component
     public $search = '';
     public $filter_domain = '';
 
+    // State untuk Reset Password Modal
+    public $resetUserId = null;
+    public $resetUserEmail = '';
+    public $newPassword = '';
+    public $showResetModal = false;
+
+    public function openResetModal($userId)
+    {
+        $user = VirtualUser::findOrFail($userId);
+        $this->resetUserId = $user->id;
+        $this->resetUserEmail = $user->email;
+        $this->newPassword = '';
+        $this->showResetModal = true;
+    }
+
+    public function closeResetModal()
+    {
+        $this->showResetModal = false;
+        $this->resetUserId = null;
+        $this->resetUserEmail = '';
+        $this->newPassword = '';
+    }
+
+    public function updatePassword()
+    {
+        $this->validate([
+            'newPassword' => 'required|string|min:6',
+        ], [
+            'newPassword.required' => 'Password baru wajib diisi.',
+            'newPassword.min' => 'Password minimal 6 karakter.',
+        ]);
+
+        $user = VirtualUser::findOrFail($this->resetUserId);
+        $user->update([
+            'password' => Hash::make($this->newPassword),
+        ]);
+
+        $savedEmail = $user->email;
+        $this->closeResetModal();
+        session()->flash('message', "Password untuk akun {$savedEmail} berhasil diperbarui! Pengguna sekarang dapat login dengan password baru.");
+    }
+
     public function mount()
     {
         $firstDomain = VirtualDomain::where('is_active', true)->first();
@@ -253,10 +295,18 @@ new class extends Component
                                 </button>
                             </td>
                             <td class="py-3 px-3 text-right">
-                                <button wire:click="deleteUser({{ $user->id }})" wire:confirm="Hapus akun mailbox ini? Seluruh data email akan terhapus." 
-                                        class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
+                                <div class="flex items-center justify-end gap-1">
+                                    <button wire:click="openResetModal({{ $user->id }})" 
+                                            title="Reset Password Mailbox" 
+                                            class="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-all cursor-pointer">
+                                        <i data-lucide="key-round" class="w-4 h-4"></i>
+                                    </button>
+                                    <button wire:click="deleteUser({{ $user->id }})" wire:confirm="Hapus akun mailbox ini? Seluruh data email akan terhapus." 
+                                            title="Hapus Akun Mailbox"
+                                            class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         @empty
@@ -271,4 +321,56 @@ new class extends Component
             </div>
         </div>
     </div>
+
+    <!-- Modal Reset Password Akun Mailbox -->
+    @if($showResetModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div class="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                        <i data-lucide="key-round" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Reset Password Mailbox</h3>
+                        <p class="text-[11px] text-slate-400 font-mono">{{ $resetUserEmail }}</p>
+                    </div>
+                </div>
+                <button wire:click="closeResetModal" class="text-slate-400 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form wire:submit="updatePassword" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1.5">Masukkan Password Baru</label>
+                    <input type="password" wire:model="newPassword" placeholder="Minimal 6 karakter" autofocus
+                           class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 font-mono">
+                    @error('newPassword') 
+                        <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> 
+                    @enderror
+                </div>
+
+                <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] leading-relaxed">
+                    <p class="font-bold flex items-center gap-1 mb-0.5">
+                        <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i> Informasi Admin
+                    </p>
+                    Password akan otomatis di-hash dengan standar Blowfish Crypt (BLF-CRYPT) yang langsung tersinkronisasi ke engine Dovecot IMAP dan Postfix SASL.
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <button type="button" wire:click="closeResetModal" 
+                            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all">
+                        Batal
+                    </button>
+                    <button type="submit" 
+                            class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Simpan Password Baru</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
 </div>
