@@ -179,11 +179,11 @@ Login ke VPS via SSH dari komputer lokal Anda:
 ```bash
 ssh root@103.180.200.15
 ```
-Di dalam terminal VPS, buat folder dan unggah/kloning proyek:
+Di dalam terminal VPS, kloning repository resmi dari GitHub ke folder `/var/www/mailids`:
 ```bash
-mkdir -p /var/www/mailids
+# Pastikan git terinstall dan kloning repository
+sudo git clone https://github.com/risky-budiman/mail-server.git /var/www/mailids
 cd /var/www/mailids
-# Kloning proyek Anda atau unggah file proyek ke sini
 ```
 
 ### B. Cara Menjalankan Instalasi Mail Engine (Pilih Salah Satu)
