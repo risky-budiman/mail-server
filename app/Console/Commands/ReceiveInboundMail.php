@@ -88,9 +88,6 @@ class ReceiveInboundMail extends Command
             } catch (\Throwable $e) {}
         }
 
-        // Ekstraksi pesan murni tanpa boundary
-        $cleanBody = $this->extractCleanBody($headerStr, $body);
-
         // Cari user pemilik mailbox di database
         $user = VirtualUser::where('email', $toEmail)->where('is_active', true)->first();
         if (!$user) {
