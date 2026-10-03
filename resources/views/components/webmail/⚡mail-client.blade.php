@@ -231,16 +231,104 @@ new class extends Component
             }
         }
 
-        // Tangani MIME Multipart (Gmail / Outlook mengirim format multipart/alternative dengan boundary)
-        $cleanBody = $this->extractCleanMimeBody($headerStr, $body);
+        // Tangani MIME Multipart & Ekstraksi File Lampiran Fisik ke Folder Storage
+        $extracted = $this->extractCleanMimeAndAttachments($headerStr, $body);
 
         return [
             'from_name' => $fromName,
             'from_email' => $fromEmail,
             'subject' => $subject,
             'date' => $date,
-            'body' => $cleanBody,
-            'attachments' => [],
+            'body' => $extracted['body'],
+            'attachments' => $extracted['attachments'],
+        ];
+    }
+
+    /**
+     * Ekstraksi teks/HTML dan simpan file lampiran fisik ke folder storage (hanya metadata di database)
+     */
+    protected function extractCleanMimeAndAttachments(string $headers, string $body): array
+    {
+        $attachments = [];
+        $htmlPart = null;
+        $textPart = null;
+
+        $boundary = null;
+        if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $headers, $bMatch)) {
+            $boundary = trim($bMatch[1]);
+        } elseif (preg_match('/--([a-zA-Z0-9_\-\.\/=]{15,})/m', $body, $bMatch)) {
+            $boundary = trim($bMatch[1]);
+        }
+
+        if ($boundary) {
+            $parts = explode('--' . $boundary, $body);
+            foreach ($parts as $part) {
+                $part = trim($part);
+                if (empty($part) || $part === '--') continue;
+
+                $sub = explode("\r\n\r\n", $part, 2);
+                if (count($sub) < 2) {
+                    $sub = explode("\n\n", $part, 2);
+                }
+
+                $partHeader = $sub[0] ?? '';
+                $partContent = $sub[1] ?? '';
+
+                $filename = null;
+                if (preg_match('/filename\*?=["\']?(?:UTF-8\'\')?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
+                    $filename = urldecode(trim($fnMatch[1]));
+                } elseif (preg_match('/name=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
+                    $filename = trim($fnMatch[1]);
+                }
+
+                if ($filename) {
+                    // Simpan file fisik ke folder storage, BUKAN ke database
+                    $cleanFileBase = preg_replace('/\s+/', '', $partContent);
+                    $fileData = base64_decode($cleanFileBase);
+                    if ($fileData !== false) {
+                        $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $filename);
+                        $storagePath = 'attachments/' . $safeName;
+                        @\Illuminate\Support\Facades\Storage::disk('public')->put($storagePath, $fileData);
+
+                        $sizeKb = round(strlen($fileData) / 1024, 1);
+                        $attachments[] = [
+                            'name' => $filename,
+                            'size' => $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB',
+                            'url' => \Illuminate\Support\Facades\Storage::url($storagePath),
+                        ];
+                    }
+                    continue;
+                }
+
+                // Cek recursive multipart
+                if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $innerBMatch)) {
+                    $innerRes = $this->extractCleanMimeAndAttachments($partHeader, $partContent);
+                    if (!empty($innerRes['body'])) $htmlPart = $innerRes['body'];
+                    if (!empty($innerRes['attachments'])) $attachments = array_merge($attachments, $innerRes['attachments']);
+                    continue;
+                }
+
+                if (stripos($partHeader, 'base64') !== false) {
+                    $decoded = base64_decode(preg_replace('/\s+/', '', $partContent));
+                    if ($decoded !== false) $partContent = $decoded;
+                } elseif (stripos($partHeader, 'quoted-printable') !== false) {
+                    $partContent = quoted_printable_decode($partContent);
+                }
+
+                if (stripos($partHeader, 'text/html') !== false) {
+                    $htmlPart = trim($partContent);
+                } elseif (stripos($partHeader, 'text/plain') !== false && empty($textPart)) {
+                    $textPart = trim($partContent);
+                }
+            }
+        }
+
+        $finalBody = !empty($htmlPart) ? $htmlPart : (!empty($textPart) ? $textPart : $body);
+        $finalBody = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $finalBody);
+
+        return [
+            'body' => trim($finalBody),
+            'attachments' => $attachments,
         ];
     }
 
