@@ -294,9 +294,9 @@ new class extends Component
                 <select wire:model.live="domain_id" wire:change="runDiagnostic" 
                         style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
                         class="appearance-none pl-3.5 pr-8 py-2 bg-slate-900/90 border border-slate-700/80 hover:border-indigo-500/60 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shadow-sm">
-                    @foreach($domains as $d)
-                        <option value="{{ $d->id }}">{{ $d->name }}</option>
-                    @endforeach
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $domains; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $d): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <option value="<?php echo e($d->id); ?>"><?php echo e($d->name); ?></option>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                 </select>
                 <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-slate-400">
                     <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -346,17 +346,17 @@ new class extends Component
             </span>
         </div>
 
-        @if($sendSuccess === true)
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($sendSuccess === true): ?>
             <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
                 <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0"></i>
-                <span>{{ $sendMessage }}</span>
+                <span><?php echo e($sendMessage); ?></span>
             </div>
-        @elseif($sendSuccess === false)
+        <?php elseif($sendSuccess === false): ?>
             <div class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5">
                 <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400 shrink-0"></i>
-                <span>{{ $sendMessage }}</span>
+                <span><?php echo e($sendMessage); ?></span>
             </div>
-        @endif
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
         <form wire:submit="sendTestMail" class="space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
@@ -369,17 +369,14 @@ new class extends Component
                         <select wire:model="sender_user_id" 
                                 style="-webkit-appearance: none; -moz-appearance: none; appearance: none; padding-left: 0.85rem; padding-right: 2.25rem;"
                                 class="w-full py-2.5 bg-slate-950 border border-slate-700 hover:border-indigo-500/60 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-inner">
-                            @php
-                                $currentDomName = optional($domains->firstWhere('id', $domain_id) ?? $domains->first())->name ?? 'ids.net.id';
-                            @endphp
-                            @if($users->isEmpty())
-                                <option value="">Postmaster Default (postmaster@{{ $currentDomName }})</option>
-                            @else
-                                <option value="">-- Postmaster Server (postmaster@{{ $currentDomName }}) --</option>
-                                @foreach($users as $u)
-                                    <option value="{{ $u->id }}">{{ $u->email }} ({{ $u->name }})</option>
-                                @endforeach
-                            @endif
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($users->isEmpty()): ?>
+                                <option value="">Postmaster Default (postmaster{{ $domains->find($domain_id)->name ?? 'ids.net.id' }})</option>
+                            <?php else: ?>
+                                <option value="">-- Postmaster Server (postmaster{{ $domains->find($domain_id)->name ?? 'ids.net.id' }}) --</option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $users; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $u): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <option value="<?php echo e($u->id); ?>"><?php echo e($u->email); ?> (<?php echo e($u->name); ?>)</option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
                             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -397,9 +394,16 @@ new class extends Component
                     <input type="email" wire:model="test_recipient" 
                            placeholder="contoh: test-xyz123@mail-tester.com" 
                            class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 shadow-inner">
-                    @error('test_recipient') 
-                        <span class="text-[10px] text-rose-400 mt-1 block pl-1">{{ $message }}</span> 
-                    @enderror
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['test_recipient'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> 
+                        <span class="text-[10px] text-rose-400 mt-1 block pl-1"><?php echo e($message); ?></span> 
+                    <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
 
                 <!-- Tombol Submit (2 cols) -->
@@ -429,27 +433,27 @@ new class extends Component
         <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <!-- Sisi Kiri: Deskripsi & Status -->
             <div class="space-y-3 max-w-2xl">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full {{ $isLive ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400' }} border text-xs font-semibold">
-                    <span class="w-2 h-2 rounded-full {{ $isLive ? 'bg-indigo-400' : 'bg-emerald-400' }} animate-pulse"></span>
-                    <span>Mode Pengujian: {{ $isLive ? 'Live DNS Query (Server Nyata)' : 'Simulasi Standar Mail Server' }}</span>
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full <?php echo e($isLive ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'); ?> border text-xs font-semibold">
+                    <span class="w-2 h-2 rounded-full <?php echo e($isLive ? 'bg-indigo-400' : 'bg-emerald-400'); ?> animate-pulse"></span>
+                    <span>Mode Pengujian: <?php echo e($isLive ? 'Live DNS Query (Server Nyata)' : 'Simulasi Standar Mail Server'); ?></span>
                 </div>
 
                 <div>
                     <h3 class="text-xl sm:text-2xl font-black text-white tracking-tight">
-                        @if($score >= 10)
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($score >= 10): ?>
                             Email Memenuhi 100% Standar Keamanan Global
-                        @elseif($score >= 7)
+                        <?php elseif($score >= 7): ?>
                             Konfigurasi DNS Cukup Baik (Perlu Penyempurnaan)
-                        @else
+                        <?php else: ?>
                             Perlu Tindakan: Record DNS Belum Terkonfigurasi Penuh
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </h3>
                     <p class="text-xs sm:text-sm text-slate-400 mt-1.5 leading-relaxed">
-                        @if($isLive)
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isLive): ?>
                             Pengecekan langsung dilakukan secara real-time ke nameserver DNS publik internet untuk memverifikasi SPF, DKIM, DMARC, dan MX record domain Anda.
-                        @else
+                        <?php else: ?>
                             Domain lokal terdeteksi dalam mode persiapan. Simulasi memverifikasi bahwa template konfigurasi Postfix/Dovecot di portal ini sudah mematuhi spesifikasi Google & Microsoft.
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </p>
                 </div>
 
@@ -480,7 +484,7 @@ new class extends Component
                         <circle cx="60" cy="60" r="48" class="text-emerald-500 transition-all duration-700 ease-out" 
                                 stroke-width="8" 
                                 stroke-dasharray="301.6" 
-                                stroke-dashoffset="{{ 301.6 - (301.6 * ($score / 10)) }}" 
+                                stroke-dashoffset="<?php echo e(301.6 - (301.6 * ($score / 10))); ?>" 
                                 stroke-linecap="round" 
                                 stroke="currentColor" 
                                 fill="transparent" />
@@ -489,7 +493,7 @@ new class extends Component
                     <!-- Center Text Content -->
                     <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
                         <span class="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                            {{ $score }}<span class="text-emerald-400 text-2xl font-bold">/10</span>
+                            <?php echo e($score); ?><span class="text-emerald-400 text-2xl font-bold">/10</span>
                         </span>
                         <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mt-0.5">
                             Sempurna
@@ -508,40 +512,42 @@ new class extends Component
         </h4>
 
         <div class="space-y-3">
-            @foreach($results as $res)
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $results; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $res): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
             <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-700 transition-colors">
                 <div class="flex items-start gap-3.5">
                     <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/20">
-                        @if($res['icon'] === 'shield-check')
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($res['icon'] === 'shield-check'): ?>
                             <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                        @elseif($res['icon'] === 'key')
+                        <?php elseif($res['icon'] === 'key'): ?>
                             <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
-                        @elseif($res['icon'] === 'lock')
+                        <?php elseif($res['icon'] === 'lock'): ?>
                             <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        @elseif($res['icon'] === 'arrow-left-right')
+                        <?php elseif($res['icon'] === 'arrow-left-right'): ?>
                             <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 4-4 4"/><path d="M4 7h16"/><path d="m16 21-4-4 4-4"/><path d="M20 17H4"/></svg>
-                        @else
+                        <?php else: ?>
                             <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <p class="text-sm font-bold text-white">{{ $res['title'] }}</p>
+                            <p class="text-sm font-bold text-white"><?php echo e($res['title']); ?></p>
                             <span class="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                {{ $res['status'] }}
+                                <?php echo e($res['status']); ?>
+
                             </span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1 font-mono">{{ $res['detail'] }}</p>
+                        <p class="text-xs text-slate-400 mt-1 font-mono"><?php echo e($res['detail']); ?></p>
                     </div>
                 </div>
 
                 <div class="sm:text-right shrink-0">
                     <span class="px-2.5 py-1 rounded bg-slate-900 text-emerald-400 font-mono text-xs font-bold border border-slate-800">
-                        {{ $res['badge'] }}
+                        <?php echo e($res['badge']); ?>
+
                     </span>
                 </div>
             </div>
-            @endforeach
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
         </div>
     </div>
-</div>
+</div><?php /**PATH D:\AI Code\mailids\resources\views/components/admin/⚡mail-tester-simulator.blade.php ENDPATH**/ ?>
