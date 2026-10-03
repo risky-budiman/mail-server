@@ -74,15 +74,61 @@ FLUSH PRIVILEGES;
 "
 ```
 
-### C. Install PHP & Ekstensi yang Dibutuhkan Laravel & Webmail (IMAP)
+### C. Install PHP 8.2 & Ekstensi yang Dibutuhkan Laravel & Webmail
+
+> [!WARNING]
+> **Penyebab Error `unmet dependencies: libc6 (>= 2.35), libssl3`:**
+> Ubuntu 20.04 (Focal) menggunakan library sistem versi lama (`libc6 2.31` dan `libssl 1.1`). Sementara PHP 8.2 di Linux modern mewajibkan `libc6 2.35+` dan `libssl3`. Mengarahkan PPA ke jammy tidak bisa dipaksakan karena file inti OS (glibc) tidak cocok.
+>
+> Karena itu, **satu-satunya solusi yang benar, bersih, dan stabil untuk Mail Server & Laravel** adalah beralih ke **Ubuntu 22.04 LTS (Jammy)** atau **Ubuntu 24.04 LTS (Noble)**.
+
+---
+
+#### 🌟 Cara 1: Rebuild / Reinstall OS dari Panel VPS (Paling Cepat - 2 Menit)
+Jika VPS ini baru dibeli dan belum ada website lain yang berjalan:
+1. Buka Dashboard Web Hosting VPS Anda (misal Contabo, DigitalOcean, Hetzner, Linode, Niagahoster, dll).
+2. Cari menu **OS Reinstall** / **Rebuild**.
+3. Pilih **Ubuntu 22.04 LTS (64-bit)** atau **Ubuntu 24.04 LTS**.
+4. Klik Reinstall. Dalam 1-2 menit server baru yang bersih siap digunakan.
+
+---
+
+#### 🌟 Cara 2: Upgrade Langsung dari Terminal VPS Tanpa Install Ulang (In-Place Upgrade)
+Jika Anda tidak ingin reset VPS dan ingin langsung meng-upgrade Ubuntu 20.04 ke Ubuntu 22.04 lewat SSH:
+
+1. Kembalikan repository apt ke kondisi bersih:
+```bash
+sudo rm -f /etc/apt/sources.list.d/*php*.list
+sudo apt-get update -y && sudo apt-get upgrade -y
+```
+
+2. Jalankan perintah resmi upgrade versi Ubuntu:
+```bash
+sudo do-release-upgrade
+```
+*(Tekan **Enter** atau ketik **y** saat sistem meminta konfirmasi proses upgrade).*
+
+3. Setelah proses selesai dan VPS reboot, login kembali via SSH. Cek versi OS:
+```bash
+lsb_release -a
+```
+*(Pastikan sudah tertulis Ubuntu 22.04 Jammy)*.
+
+---
+
+#### 🌟 Setelah di Ubuntu 22.04+: Jalankan Instalasi PHP 8.2 dengan Mulus
 ```bash
 sudo add-apt-repository ppa:ondrej/php -y
 sudo apt-get update -y
-
-# Untuk Ubuntu dengan PHP 8.2 (atau ganti 8.3 sesuai preferensi):
 sudo apt-get install -y php8.2 php8.2-fpm php8.2-cli php8.2-common php8.2-mysql php8.2-sqlite3 \
     php8.2-zip php8.2-gd php8.2-mbstring php8.2-curl php8.2-xml php8.2-bcmath php8.2-intl \
     php8.2-readline php8.2-imap php8.2-soap
+```
+
+Verifikasi:
+```bash
+php -v
+sudo systemctl status php8.2-fpm
 ```
 
 ### D. Install Composer & Node.js (Vite Asset Builder)
