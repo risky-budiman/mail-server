@@ -132,7 +132,9 @@ echo "======================================================"
 echo " 7. Setup OpenDKIM (Tanda Tangan Digital Anti-Spam)"
 echo "======================================================"
 mkdir -p /etc/opendkim/keys
+mkdir -p /run/opendkim
 chown -R opendkim:opendkim /etc/opendkim
+chown -R opendkim:opendkim /run/opendkim
 chmod -R 700 /etc/opendkim/keys
 
 cat << 'EOF' > /etc/opendkim.conf
@@ -146,14 +148,22 @@ Canonicalization        relaxed/simple
 Mode                    sv
 SubDomains              no
 OversignHeaders         From
-Socket                  inet:12301@localhost
+UserID                  opendkim:opendkim
+PidFile                 /run/opendkim/opendkim.pid
+Socket                  inet:12301@127.0.0.1
+EOF
+
+# Pastikan override default socket tidak bentrok
+mkdir -p /etc/default
+cat << 'EOF' > /etc/default/opendkim
+SOCKET="inet:12301@127.0.0.1"
 EOF
 
 # Hubungkan Postfix ke OpenDKIM Milter
 postconf -e "milter_default_action = accept"
 postconf -e "milter_protocol = 6"
-postconf -e "smtpd_milters = inet:localhost:12301"
-postconf -e "non_smtpd_milters = inet:localhost:12301"
+postconf -e "smtpd_milters = inet:127.0.0.1:12301"
+postconf -e "non_smtpd_milters = inet:127.0.0.1:12301"
 
 echo "======================================================"
 echo " 8. Firewall Rules (UFW)"
