@@ -21,7 +21,7 @@ class DatabaseSeeder extends Seeder
             ['email' => 'admin@mailportal.local'],
             [
                 'name' => 'Administrator',
-                'password' => Hash::make('Admin123!'),
+                'password' => Hash::make('AdminSecret123!'),
                 'email_verified_at' => now(),
             ]
         );
