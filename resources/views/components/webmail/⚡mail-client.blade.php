@@ -220,14 +220,79 @@ new class extends Component
             }
         }
 
+        // Tangani MIME Multipart (Gmail / Outlook mengirim format multipart/alternative dengan boundary)
+        $cleanBody = $this->extractCleanMimeBody($headerStr, $body);
+
         return [
             'from_name' => $fromName,
             'from_email' => $fromEmail,
             'subject' => $subject,
             'date' => $date,
-            'body' => trim($body),
+            'body' => $cleanBody,
             'attachments' => [],
         ];
+    }
+
+    /**
+     * Ekstraksi teks atau HTML bersih dari pesan MIME multipart
+     */
+    protected function extractCleanMimeBody(string $headers, string $body): string
+    {
+        // 1. Cari MIME boundary dari header
+        if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $headers, $bMatch)) {
+            $boundary = trim($bMatch[1]);
+            $delimiter = '--' . $boundary;
+            $parts = explode($delimiter, $body);
+
+            $htmlPart = null;
+            $textPart = null;
+
+            foreach ($parts as $part) {
+                $part = trim($part);
+                if (empty($part) || $part === '--') continue;
+
+                $subParts = explode("\r\n\r\n", $part, 2);
+                if (count($subParts) < 2) {
+                    $subParts = explode("\n\n", $part, 2);
+                }
+
+                $subHeader = $subParts[0] ?? '';
+                $subContent = $subParts[1] ?? '';
+
+                // Handle Transfer-Encoding: base64
+                if (stripos($subHeader, 'Content-Transfer-Encoding: base64') !== false) {
+                    $subContent = base64_decode(preg_replace('/\s+/', '', $subContent)) ?: $subContent;
+                }
+                // Handle Transfer-Encoding: quoted-printable
+                elseif (stripos($subHeader, 'Content-Transfer-Encoding: quoted-printable') !== false) {
+                    $subContent = quoted_printable_decode($subContent);
+                }
+
+                if (stripos($subHeader, 'text/html') !== false) {
+                    $htmlPart = trim($subContent);
+                } elseif (stripos($subHeader, 'text/plain') !== false) {
+                    $textPart = trim($subContent);
+                }
+            }
+
+            // Prioritaskan HTML part jika ada, atau fallback ke teks biasa
+            if (!empty($htmlPart)) {
+                return $htmlPart;
+            }
+            if (!empty($textPart)) {
+                return $textPart;
+            }
+        }
+
+        // 2. Jika bukan multipart ber-boundary, periksa encoding biasa
+        if (stripos($headers, 'Content-Transfer-Encoding: base64') !== false) {
+            $decoded = base64_decode(preg_replace('/\s+/', '', $body));
+            if ($decoded) return $decoded;
+        } elseif (stripos($headers, 'Content-Transfer-Encoding: quoted-printable') !== false) {
+            return quoted_printable_decode($body);
+        }
+
+        return trim($body);
     }
 
     protected function seedInitialEmailsIfEmpty()

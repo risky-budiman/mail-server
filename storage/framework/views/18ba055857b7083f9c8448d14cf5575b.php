@@ -76,6 +76,9 @@ new class extends Component
 
             // 2. Pastikan database terisi seed jika masih kosong
             $this->seedInitialEmailsIfEmpty();
+
+            // 3. Sinkronkan email riil yang masuk di harddisk VPS (/var/vmail) secara otomatis
+            $this->syncFromMaildir($user);
         }
     }
 
@@ -83,11 +86,148 @@ new class extends Component
     {
         $user = $this->getAccount();
         if ($user) {
+            $syncedCount = $this->syncFromMaildir($user);
             $actualBytes = $this->calculateActualEmailsBytes();
             $user->syncMaildirDiskUsage($actualBytes);
+
+            if ($syncedCount > 0) {
+                session()->flash('webmail_msg', "Berhasil menarik {$syncedCount} email baru dari Dovecot Maildir!");
+            } else {
+                session()->flash('webmail_msg', 'Kotak masuk sudah dalam kondisi terbaru.');
+            }
+        }
+    }
+
+    /**
+     * Sinkronisasi file email fisik dari Maildir Dovecot (/var/vmail/domain/user/new & cur)
+     */
+    protected function syncFromMaildir(VirtualUser $user): int
+    {
+        $domain = $user->domain ? $user->domain->name : null;
+        if (!$domain && str_contains($user->email, '@')) {
+            $parts = explode('@', $user->email);
+            $domain = $parts[1];
         }
 
-        session()->flash('webmail_msg', 'Kotak masuk diperbarui dari Maildir Dovecot.');
+        $localPart = explode('@', $user->email)[0];
+        $maildirBase = '/var/vmail/' . ($domain ? "{$domain}/{$localPart}" : ltrim($user->maildir_path, '/'));
+
+        if (!is_dir($maildirBase)) {
+            return 0;
+        }
+
+        $subdirs = ['new', 'cur'];
+        $synced = 0;
+
+        foreach ($subdirs as $sub) {
+            $dirPath = "{$maildirBase}/{$sub}";
+            if (!is_dir($dirPath)) continue;
+
+            $files = @scandir($dirPath);
+            if (!$files) continue;
+
+            foreach ($files as $file) {
+                if ($file === '.' || $file === '..' || str_starts_with($file, '.')) continue;
+
+                $fullFile = "{$dirPath}/{$file}";
+                if (!is_file($fullFile) || !is_readable($fullFile)) continue;
+
+                // Gunakan hash nama file unik sebagai identitas
+                $fileKey = md5("{$user->id}_{$file}");
+                $exists = MailboxEmail::where('virtual_user_id', $user->id)
+                    ->where('body', 'like', "%[UID:{$fileKey}]%")
+                    ->exists();
+
+                if ($exists) continue;
+
+                $rawContent = @file_get_contents($fullFile);
+                if (!$rawContent) continue;
+
+                $parsed = $this->parseRawRfc822Email($rawContent);
+
+                MailboxEmail::create([
+                    'virtual_user_id' => $user->id,
+                    'folder' => 'inbox',
+                    'from_name' => $parsed['from_name'] ?: 'Sender',
+                    'from_email' => $parsed['from_email'] ?: 'unknown@domain.com',
+                    'to' => $user->email,
+                    'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
+                    'date_human' => $parsed['date'] ?: now()->format('d M, H:i'),
+                    'is_read' => ($sub === 'cur'),
+                    'is_starred' => false,
+                    'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
+                    'attachments' => $parsed['attachments'],
+                ]);
+
+                $synced++;
+            }
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Parser sederhana email mentah RFC 822 (headers + body)
+     */
+    protected function parseRawRfc822Email(string $raw): array
+    {
+        $parts = explode("\r\n\r\n", $raw, 2);
+        if (count($parts) < 2) {
+            $parts = explode("\n\n", $raw, 2);
+        }
+
+        $headerStr = $parts[0] ?? '';
+        $body = $parts[1] ?? '';
+
+        $fromName = '';
+        $fromEmail = '';
+        $subject = '(Tanpa Subjek)';
+        $date = '';
+
+        $lines = preg_split('/\r\n|\r|\n/', $headerStr);
+        $headers = [];
+        $currentKey = '';
+
+        foreach ($lines as $line) {
+            if (preg_match('/^([a-zA-Z0-9\-]+):\s*(.*)$/', $line, $matches)) {
+                $currentKey = strtolower($matches[1]);
+                $headers[$currentKey] = trim($matches[2]);
+            } elseif ($currentKey && preg_match('/^\s+(.*)$/', $line, $matches)) {
+                $headers[$currentKey] .= ' ' . trim($matches[1]);
+            }
+        }
+
+        if (!empty($headers['from'])) {
+            $fromRaw = $headers['from'];
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $fromRaw, $m)) {
+                $fromName = trim(trim($m[1]), '"\'');
+                $fromEmail = trim($m[2]);
+            } else {
+                $fromEmail = trim($fromRaw);
+                $fromName = $fromEmail;
+            }
+        }
+
+        if (!empty($headers['subject'])) {
+            $subject = $this->decodeMimeHeader($headers['subject']);
+        }
+
+        if (!empty($headers['date'])) {
+            try {
+                $date = \Carbon\Carbon::parse($headers['date'])->format('d M, H:i');
+            } catch (\Throwable $e) {
+                $date = now()->format('d M, H:i');
+            }
+        }
+
+        return [
+            'from_name' => $fromName,
+            'from_email' => $fromEmail,
+            'subject' => $subject,
+            'date' => $date,
+            'body' => trim($body),
+            'attachments' => [],
+        ];
     }
 
     protected function seedInitialEmailsIfEmpty()
@@ -590,11 +730,22 @@ new class extends Component
             }
         }
 
+        // Kirim fisik email keluar via Postfix SMTP / Sendmail
+        $fromEmail = $user->email ?: 'admin@perusahaan.net.id';
+        $fromName = $user->name ?: 'Administrator';
+        \App\Services\MailService::sendOutboundMail(
+            $fromEmail,
+            $fromName,
+            $this->composeTo,
+            $this->composeSubject,
+            $this->composeBody
+        );
+
         MailboxEmail::create([
             'virtual_user_id' => $user->id,
             'folder' => 'sent',
-            'from_name' => $user->name ?: 'Administrator',
-            'from_email' => $user->email ?: 'admin@perusahaan.net.id',
+            'from_name' => $fromName,
+            'from_email' => $fromEmail,
             'to' => $this->composeTo,
             'subject' => $this->composeSubject,
             'date_human' => 'Baru saja',
@@ -609,7 +760,7 @@ new class extends Component
 
         $this->resetComposeForm();
         $this->showComposeModal = false;
-        session()->flash('webmail_msg', 'Email beserta lampiran berhasil dikirim ke antrean SMTP Postfix!');
+        session()->flash('webmail_msg', 'Email berhasil dikirim ke penerima melalui engine Postfix!');
     }
 
     public function sendQuickReply()
@@ -642,11 +793,21 @@ new class extends Component
             }
         }
 
+        $fromEmail = $user->email ?: 'admin@perusahaan.net.id';
+        $fromName = $user->name ?: 'Administrator';
+        \App\Services\MailService::sendOutboundMail(
+            $fromEmail,
+            $fromName,
+            $recipient,
+            $subject,
+            $this->quickReplyText
+        );
+
         MailboxEmail::create([
             'virtual_user_id' => $user->id,
             'folder' => 'sent',
-            'from_name' => $user->name ?: 'Administrator',
-            'from_email' => $user->email ?: 'admin@perusahaan.net.id',
+            'from_name' => $fromName,
+            'from_email' => $fromEmail,
             'to' => $recipient,
             'subject' => $subject,
             'date_human' => 'Baru saja',
