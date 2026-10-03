@@ -1465,7 +1465,7 @@ new class extends Component
                             </button>
                         </div>
 
-                        <!-- Sender Name -->
+                        <!-- Sender / Recipient Name (Jika folder Terkirim, tampilkan To: Penerima) -->
                         <div class="w-44 sm:w-56 shrink-0 truncate text-xs sm:text-sm flex items-center gap-2">
                             @if(!$email['is_read'])
                                 <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 ring-4 ring-cyan-400/20" title="Belum Dibaca"></span>
@@ -1473,7 +1473,11 @@ new class extends Component
                                 <span class="w-2 h-2 rounded-full bg-transparent shrink-0"></span>
                             @endif
                             <span class="truncate {{ $email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white' }}">
-                                {{ $email['from_name'] }}
+                                @if($activeFolder === 'sent')
+                                    <span class="text-slate-400 font-normal">Ke:</span> {{ $email['to'] ?: 'Penerima' }}
+                                @else
+                                    {{ $email['from_name'] }}
+                                @endif
                             </span>
                         </div>
 
