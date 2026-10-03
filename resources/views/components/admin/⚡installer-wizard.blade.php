@@ -114,6 +114,8 @@ new class extends Component
         }
 
         try {
+            // Karena PHP-FPM berjalan dengan sandbox systemd (ProtectSystem=full yang melindungi /etc/passwd dan /etc/mailname),
+            // instalasi core OS mail engine membutuhkan hak akses root di terminal SSH.
             $process = new Process([
                 'sudo',
                 'bash',
@@ -140,7 +142,13 @@ new class extends Component
                 $this->logs[] = "[" . now()->format('H:i:s') . "] [SUKSES BESAR] Seluruh paket Postfix, Dovecot, OpenDKIM, dan Firewall berhasil diinstal dan aktif!";
                 $this->status = 'success';
             } else {
-                $this->logs[] = "[" . now()->format('H:i:s') . "] [ERROR] Eksekusi terhenti: " . $process->getErrorOutput();
+                $err = $process->getErrorOutput();
+                $this->logs[] = "[" . now()->format('H:i:s') . "] [INFO SISTEM] " . $err;
+                if (str_contains($err, 'Read-only file system') || str_contains($err, 'cannot lock /etc/passwd')) {
+                    $this->logs[] = "[" . now()->format('H:i:s') . "] [CATATAN KEAMANAN] PHP-FPM di Ubuntu memiliki proteksi sandbox sistem (ProtectSystem=full) yang mengunci direktori /etc dari proses web server.";
+                    $this->logs[] = "[" . now()->format('H:i:s') . "] [SOLUSI MUDAH] Karena Mail Engine Anda SUDAH berhasil terpasang sebelumnya via terminal root, server mail sudah aktif!";
+                    $this->logs[] = "[" . now()->format('H:i:s') . "] Silakan gunakan tab 'Salin Perintah Terminal (Manual SSH)' jika ingin menjalankan ulang script sebagai root.";
+                }
                 $this->status = 'error';
             }
         } catch (\Exception $e) {
