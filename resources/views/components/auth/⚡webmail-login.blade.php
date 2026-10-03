@@ -6,8 +6,8 @@ use App\Models\VirtualUser;
 
 new class extends Component
 {
-    public $email = 'admin@perusahaan.net.id';
-    public $password = 'Secret123!';
+    public $email = '';
+    public $password = '';
     public $remember = false;
 
     public function login()
@@ -60,13 +60,13 @@ new class extends Component
     <form wire:submit="login" class="space-y-4">
         <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Alamat Email Mailbox</label>
-            <input type="email" wire:model="email" placeholder="contoh: nama@perusahaan.net.id" 
+            <input type="email" wire:model="email" placeholder="contoh: nama@domainanda.com" 
                    class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono">
         </div>
 
         <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Password Mailbox</label>
-            <input type="password" wire:model="password" 
+            <input type="password" wire:model="password" placeholder="••••••••"
                    class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
         </div>
 
@@ -84,11 +84,5 @@ new class extends Component
             <span wire:loading.remove wire:target="login">Masuk ke Webmail</span>
             <span wire:loading wire:target="login">Menghubungkan ke Dovecot...</span>
         </button>
-
-        <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400">
-            <p class="font-bold text-slate-300 mb-0.5">Akun Contoh Pengujian:</p>
-            <p>Email: <span class="text-cyan-300 font-mono">admin@perusahaan.net.id</span></p>
-            <p>Password: <span class="text-cyan-300 font-mono">Secret123!</span></p>
-        </div>
     </form>
 </div>

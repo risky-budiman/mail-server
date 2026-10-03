@@ -5,8 +5,8 @@ use Illuminate\Support\Facades\Auth;
 
 new class extends Component
 {
-    public $email = 'admin@mailportal.local';
-    public $password = 'AdminSecret123!';
+    public $email = '';
+    public $password = '';
     public $remember = false;
 
     public function login()
@@ -51,13 +51,13 @@ new class extends Component
     <form wire:submit="login" class="space-y-4">
         <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Email Administrator</label>
-            <input type="email" wire:model="email" 
+            <input type="email" wire:model="email" placeholder="admin@domainanda.com"
                    class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
         </div>
 
         <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
-            <input type="password" wire:model="password" 
+            <input type="password" wire:model="password" placeholder="••••••••"
                    class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
         </div>
 
@@ -75,11 +75,5 @@ new class extends Component
             <span wire:loading.remove wire:target="login">Masuk Dashboard Admin</span>
             <span wire:loading wire:target="login">Memverifikasi...</span>
         </button>
-
-        <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400">
-            <p class="font-bold text-slate-300 mb-0.5">Kredensial Admin Bawaan:</p>
-            <p>Email: <span class="text-indigo-300 font-mono">admin@mailportal.local</span></p>
-            <p>Password: <span class="text-indigo-300 font-mono">AdminSecret123!</span></p>
-        </div>
     </form>
 </div>

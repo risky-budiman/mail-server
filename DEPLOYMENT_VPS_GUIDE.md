@@ -270,6 +270,28 @@ php artisan db:seed --force
 php artisan storage:link
 ```
 
+> [!SECURITY]
+> **Kredensial Default Admin Portal (Hanya di Dokumentasi Internal Ini):**
+> Demi keamanan production, form login web tidak menampilkan bocoran password sama sekali.
+> - **URL Admin:** `https://mail.perusahaan.co.id/admin/login`
+> - **Email:** `admin@mailportal.local`
+> - **Password:** `AdminSecret123!`
+> 
+> *Untuk mengubah password atau membuat user admin kustom langsung dari terminal VPS:*
+> ```bash
+> php artisan tinker --execute="
+> \App\Models\User::updateOrCreate(
+>     ['email' => 'admin@perusahaan.co.id'],
+>     [
+>         'name' => 'Super Administrator',
+>         'password' => \Illuminate\Support\Facades\Hash::make('PasswordSuperKuat123!'),
+>         'email_verified_at' => now(),
+>     ]
+> );
+> echo 'Akun Admin berhasil dibuat!';
+> "
+> ```
+
 Set hak akses direktori Laravel:
 ```bash
 chown -R www-data:www-data /var/www/mailids
