@@ -131,11 +131,32 @@ EOF
 echo "======================================================"
 echo " 7. Setup OpenDKIM (Tanda Tangan Digital Anti-Spam)"
 echo "======================================================"
-mkdir -p /etc/opendkim/keys
+mkdir -p /etc/opendkim/keys/${DOMAIN}
 mkdir -p /run/opendkim
 chown -R opendkim:opendkim /etc/opendkim
 chown -R opendkim:opendkim /run/opendkim
-chmod -R 700 /etc/opendkim/keys
+
+# Generate key pair OpenDKIM jika belum ada
+if [ ! -f "/etc/opendkim/keys/${DOMAIN}/default.private" ]; then
+    opendkim-genkey -b 2048 -d "${DOMAIN}" -D "/etc/opendkim/keys/${DOMAIN}" -s default
+    chown -R opendkim:opendkim "/etc/opendkim/keys/${DOMAIN}"
+    chmod 600 "/etc/opendkim/keys/${DOMAIN}/default.private"
+fi
+
+cat << EOF > /etc/opendkim/SigningTable
+*@${DOMAIN} default._domainkey.${DOMAIN}
+EOF
+
+cat << EOF > /etc/opendkim/KeyTable
+default._domainkey.${DOMAIN} ${DOMAIN}:default:/etc/opendkim/keys/${DOMAIN}/default.private
+EOF
+
+cat << 'EOF' > /etc/opendkim/TrustedHosts
+127.0.0.1
+localhost
+EOF
+echo "${HOSTNAME}" >> /etc/opendkim/TrustedHosts
+echo "${DOMAIN}" >> /etc/opendkim/TrustedHosts
 
 cat << 'EOF' > /etc/opendkim.conf
 AutoRestart             Yes
@@ -151,6 +172,11 @@ OversignHeaders         From
 UserID                  opendkim:opendkim
 PidFile                 /run/opendkim/opendkim.pid
 Socket                  inet:12301@127.0.0.1
+
+KeyTable                /etc/opendkim/KeyTable
+SigningTable            refile:/etc/opendkim/SigningTable
+ExternalIgnoreList      refile:/etc/opendkim/TrustedHosts
+InternalHosts           refile:/etc/opendkim/TrustedHosts
 EOF
 
 # Pastikan override default socket tidak bentrok
