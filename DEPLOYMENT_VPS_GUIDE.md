@@ -116,19 +116,25 @@ lsb_release -a
 
 ---
 
-#### 🌟 Setelah di Ubuntu 22.04+: Jalankan Instalasi PHP 8.2 dengan Mulus
+#### 🌟 Setelah di Ubuntu 22.04+: Jalankan Instalasi PHP 8.3 dengan Mulus
+Laravel pada proyek ini menggunakan PHP 8.3 (`php: ^8.3` di `composer.json`):
 ```bash
 sudo add-apt-repository ppa:ondrej/php -y
 sudo apt-get update -y
-sudo apt-get install -y php8.2 php8.2-fpm php8.2-cli php8.2-common php8.2-mysql php8.2-sqlite3 \
-    php8.2-zip php8.2-gd php8.2-mbstring php8.2-curl php8.2-xml php8.2-bcmath php8.2-intl \
-    php8.2-readline php8.2-imap php8.2-soap
+sudo apt-get install -y php8.3 php8.3-fpm php8.3-cli php8.3-common php8.3-mysql php8.3-sqlite3 \
+    php8.3-zip php8.3-gd php8.3-mbstring php8.3-curl php8.3-xml php8.3-bcmath php8.3-intl \
+    php8.3-readline php8.3-imap php8.3-soap
+```
+
+Set PHP 8.3 sebagai default:
+```bash
+sudo update-alternatives --set php /usr/bin/php8.3
 ```
 
 Verifikasi:
 ```bash
 php -v
-sudo systemctl status php8.2-fpm
+sudo systemctl status php8.3-fpm
 ```
 
 ### D. Install Composer & Node.js (Vite Asset Builder)
@@ -298,7 +304,7 @@ server {
     error_page 404 /index.php;
 
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock; # Sesuaikan jika menggunakan php8.3-fpm
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
         fastcgi_read_timeout 300;
