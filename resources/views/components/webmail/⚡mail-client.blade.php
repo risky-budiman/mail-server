@@ -1043,8 +1043,10 @@ new class extends Component
                 ];
             });
 
-        // Detail email hanya dimuat lengkap jika mode detail dibuka
+        // Detail email dan Conversation Thread Tree (Gaya Gmail & Chat)
         $selectedEmail = null;
+        $threadEmails = [];
+
         if ($this->viewMode === 'detail' && $this->selectedEmailId && $user) {
             $rawSelected = MailboxEmail::where('virtual_user_id', $user->id)->find($this->selectedEmailId);
             if ($rawSelected) {
@@ -1063,6 +1065,34 @@ new class extends Component
                     'spam_reason' => $rawSelected->spam_reason,
                     'spam_score' => $rawSelected->spam_score,
                 ];
+
+                // Temukan seluruh thread percakapan (Conversation Thread Tree) berdasarkan subject dan korespondensi
+                $cleanSubj = trim(preg_replace('/^(Re:\s*|Fwd:\s*)+/i', '', $rawSelected->subject));
+                if (!empty($cleanSubj)) {
+                    $otherParty = ($rawSelected->folder === 'sent') ? $rawSelected->to : $rawSelected->from_email;
+                    
+                    $threadList = MailboxEmail::where('virtual_user_id', $user->id)
+                        ->where(function ($q) use ($cleanSubj) {
+                            $q->where('subject', 'like', "%{$cleanSubj}%");
+                        })
+                        ->orderBy('id', 'asc')
+                        ->get();
+
+                    foreach ($threadList as $tItem) {
+                        $threadEmails[] = [
+                            'id' => $tItem->id,
+                            'is_current' => ($tItem->id === $rawSelected->id),
+                            'folder' => $tItem->folder,
+                            'from_name' => $this->decodeMimeHeader($tItem->from_name),
+                            'from_email' => $tItem->from_email,
+                            'to' => $tItem->to,
+                            'subject' => $this->decodeMimeHeader($tItem->subject),
+                            'date' => $tItem->date_human ?: $tItem->created_at->format('d M, H:i'),
+                            'body' => $tItem->body,
+                            'attachments' => $tItem->attachments ?: [],
+                        ];
+                    }
+                }
             }
         }
 
@@ -1077,6 +1107,7 @@ new class extends Component
         return view('components.webmail.⚡mail-client', [
             'filteredEmails' => $filteredEmails,
             'selectedEmail' => $selectedEmail,
+            'threadEmails' => $threadEmails,
             'counts' => $counts,
         ])->layout('layouts.webmail', ['title' => 'Webmail Client - MailIDS']);
     }
@@ -1679,7 +1710,50 @@ new class extends Component
                     </div>
                     @endif
 
-                    <!-- Email Body Content (HTML & Plain Text Support) -->
+                    <!-- Conversation Thread Tree (Rantai Balasan Email / Chat Tree) -->
+                    @if(count($threadEmails) > 1)
+                    <div class="space-y-4 pt-2 pb-4">
+                        <div class="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider pb-1 border-b border-slate-800">
+                            <i data-lucide="git-branch" class="w-3.5 h-3.5 text-cyan-400"></i>
+                            <span>Rantai Percakapan Email ({{ count($threadEmails) }} Pesan Terkait)</span>
+                        </div>
+
+                        <div class="space-y-3 pl-2 sm:pl-3 border-l-2 border-indigo-500/30">
+                            @foreach($threadEmails as $index => $tMsg)
+                                @if(!$tMsg['is_current'])
+                                <div class="rounded-2xl p-4 sm:p-5 bg-slate-900/50 hover:bg-slate-900 border border-slate-800/80 transition-all cursor-pointer space-y-2 group"
+                                     wire:click="$set('selectedEmailId', {{ $tMsg['id'] }})">
+                                    <div class="flex items-center justify-between gap-3 text-xs">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-6 h-6 rounded-full {{ $tMsg['folder'] === 'sent' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-indigo-500/20 text-indigo-300' }} flex items-center justify-center font-bold text-[10px]">
+                                                {{ $index + 1 }}
+                                            </span>
+                                            <span class="font-bold text-white group-hover:text-cyan-400 transition-colors">
+                                                {{ $tMsg['from_name'] }}
+                                            </span>
+                                            <span class="text-[11px] text-slate-500 font-mono">
+                                                &lt;{{ $tMsg['from_email'] }}&gt;
+                                            </span>
+                                            @if($tMsg['folder'] === 'sent')
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Balasan Anda</span>
+                                            @else
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300">Pesan Masuk</span>
+                                            @endif
+                                        </div>
+                                        <span class="text-[11px] text-slate-400 font-mono">{{ $tMsg['date'] }}</span>
+                                    </div>
+
+                                    <div class="text-xs text-slate-300 line-clamp-2 pl-8 font-sans leading-relaxed opacity-85">
+                                        {{ strip_tags($tMsg['body']) }}
+                                    </div>
+                                </div>
+                                @endif
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
+
+                    <!-- Active Email Body Content (HTML & Plain Text Support) -->
                     <div class="py-2 text-slate-200">
                         @if (preg_match('/<[a-z][\s\S]*>/i', $selectedEmail['body']))
                             {{-- Email Berformat Rich HTML (Tampilan Kertas Dokumen Modern Bersih) --}}
