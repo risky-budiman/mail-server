@@ -6,6 +6,7 @@ use App\Models\VirtualDomain;
 new class extends Component
 {
     public $domain_id = '';
+    public $sender_user_id = '';
     public $testing = false;
     public $score = 10;
     public $results = [];
@@ -19,7 +20,18 @@ new class extends Component
         $domain = VirtualDomain::first();
         if ($domain) {
             $this->domain_id = $domain->id;
+            $firstUser = \App\Models\VirtualUser::where('domain_id', $domain->id)->where('is_active', true)->first();
+            if ($firstUser) {
+                $this->sender_user_id = $firstUser->id;
+            }
         }
+        $this->runDiagnostic();
+    }
+
+    public function updatedDomainId($val)
+    {
+        $user = \App\Models\VirtualUser::where('domain_id', $val)->where('is_active', true)->first();
+        $this->sender_user_id = $user ? $user->id : '';
         $this->runDiagnostic();
     }
 
@@ -34,10 +46,23 @@ new class extends Component
 
         $domain = VirtualDomain::find($this->domain_id) ?? VirtualDomain::first();
         $domainName = $domain ? trim($domain->name) : 'ids.net.id';
-        $fromEmail = "postmaster@{$domainName}";
-        $fromName = "MailIDS System ({$domainName})";
+
+        // Tentukan akun pengirim yang dipilih
+        $senderUser = null;
+        if (!empty($this->sender_user_id)) {
+            $senderUser = \App\Models\VirtualUser::find($this->sender_user_id);
+        }
+
+        if ($senderUser) {
+            $fromEmail = $senderUser->email;
+            $fromName = $senderUser->name ?: "Mail User ({$senderUser->email})";
+        } else {
+            $fromEmail = "postmaster@{$domainName}";
+            $fromName = "MailIDS System ({$domainName})";
+        }
+
         $subject = "Uji Skor Deliverability Mail-Tester - " . now()->format('d M Y H:i:s');
-        $body = "Halo Mail-Tester,\n\nIni adalah pesan pengujian otomatis dari sistem Mail Server mandiri ({$domainName}).\nPesan ini dikirim untuk memverifikasi SPF, DKIM 2048-bit, DMARC policy, dan reputasi PTR rDNS IP server.\n\nDikirim pada: " . now()->toRfc2822();
+        $body = "Halo Mail-Tester,\n\nIni adalah pesan pengujian otomatis dari akun email {$fromEmail} di server mandiri ({$domainName}).\nPesan ini dikirim untuk memverifikasi SPF, DKIM 2048-bit, DMARC policy, dan reputasi PTR rDNS IP server.\n\nAkun Pengirim: {$fromEmail}\nDikirim pada: " . now()->toRfc2822();
 
         $this->isSending = true;
         try {
@@ -51,7 +76,7 @@ new class extends Component
 
             if ($success) {
                 $this->sendSuccess = true;
-                $this->sendMessage = "Pesan pengujian berhasil dikirim ke {$this->test_recipient} menggunakan pengirim {$fromEmail}! Silakan buka web mail-tester.com dan klik tombol 'Then check your score'.";
+                $this->sendMessage = "Pesan pengujian berhasil dikirim ke {$this->test_recipient} dari akun {$fromEmail}! Silakan buka tab mail-tester.com dan klik tombol 'Then check your score'.";
             } else {
                 $this->sendSuccess = false;
                 $this->sendMessage = "Gagal mengirim email melalui engine Postfix lokal. Periksa log server pada menu Log Viewer.";
@@ -229,8 +254,15 @@ new class extends Component
     public function render()
     {
         $domains = VirtualDomain::all();
+        $users = \App\Models\VirtualUser::when($this->domain_id, function ($q) {
+                $q->where('domain_id', $this->domain_id);
+            })
+            ->where('is_active', true)
+            ->get();
+
         return view('components.admin.⚡mail-tester-simulator', [
             'domains' => $domains,
+            'users' => $users,
         ])->layout('layouts.app', ['title' => 'Mail-Tester Diagnostic - Mail Portal']);
     }
 };
@@ -326,27 +358,62 @@ new class extends Component
             </div>
         @endif
 
-        <form wire:submit="sendTestMail" class="flex flex-col sm:flex-row items-stretch gap-3">
-            <div class="flex-1 relative">
-                <input type="email" wire:model="test_recipient" 
-                       placeholder="Tempel alamat email dari mail-tester (contoh: test-xyz123@mail-tester.com)" 
-                       class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 shadow-inner">
-                @error('test_recipient') 
-                    <span class="text-[10px] text-rose-400 mt-1 block pl-1">{{ $message }}</span> 
-                @enderror
-            </div>
+        <form wire:submit="sendTestMail" class="space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                <!-- Pilihan Akun Pengirim Mailbox (5 cols) -->
+                <div class="md:col-span-5">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Kirim Menggunakan Akun Email:
+                    </label>
+                    <div class="relative">
+                        <select wire:model="sender_user_id" 
+                                style="-webkit-appearance: none; -moz-appearance: none; appearance: none; padding-left: 0.85rem; padding-right: 2.25rem;"
+                                class="w-full py-2.5 bg-slate-950 border border-slate-700 hover:border-indigo-500/60 rounded-xl text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-inner">
+                            @if($users->isEmpty())
+                                <option value="">Postmaster Default (postmaster@{{ $domains->find($domain_id)->name ?? 'ids.net.id' }})</option>
+                            @else
+                                <option value="">-- Postmaster Server (postmaster@{{ $domains->find($domain_id)->name ?? 'ids.net.id' }}) --</option>
+                                @foreach($users as $u)
+                                    <option value="{{ $u->id }}">{{ $u->email }} ({{ $u->name }})</option>
+                                @endforeach
+                            @endif
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m6 9 6 6 6-6"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
 
-            <button type="submit" wire:loading.attr="disabled"
-                    class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50">
-                <span wire:loading.remove wire:target="sendTestMail" class="flex items-center gap-2">
-                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                    <span>Kirim Pesan Uji Sekarang</span>
-                </span>
-                <span wire:loading wire:target="sendTestMail" class="flex items-center gap-2">
-                    <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
-                    <span>Mengirim Outbound...</span>
-                </span>
-            </button>
+                <!-- Input Alamat Penerima Mail-Tester (5 cols) -->
+                <div class="md:col-span-5">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Alamat Email Tujuan (Dari Mail-Tester.com):
+                    </label>
+                    <input type="email" wire:model="test_recipient" 
+                           placeholder="contoh: test-xyz123@mail-tester.com" 
+                           class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 shadow-inner">
+                    @error('test_recipient') 
+                        <span class="text-[10px] text-rose-400 mt-1 block pl-1">{{ $message }}</span> 
+                    @enderror
+                </div>
+
+                <!-- Tombol Submit (2 cols) -->
+                <div class="md:col-span-2 pt-0 md:pt-5">
+                    <button type="submit" wire:loading.attr="disabled"
+                            class="w-full py-2.5 px-3 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50">
+                        <span wire:loading.remove wire:target="sendTestMail" class="flex items-center gap-1.5">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                            <span>Kirim Uji</span>
+                        </span>
+                        <span wire:loading wire:target="sendTestMail" class="flex items-center gap-1.5">
+                            <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                            <span>Mengirim...</span>
+                        </span>
+                    </button>
+                </div>
+            </div>
         </form>
     </div>
 
