@@ -66,19 +66,56 @@ class MailService
     }
 
     /**
-     * Kirim email keluar melalui Postfix SMTP
+     * Kirim email keluar melalui Postfix SMTP atau /usr/sbin/sendmail
      */
     public static function sendOutboundMail(string $fromEmail, string $fromName, string $to, string $subject, string $bodyContent): bool
     {
+        // 1. Coba kirim via Laravel Mailer terlebih dahulu
         try {
-            Mail::raw($bodyContent, function ($message) use ($fromEmail, $fromName, $to, $subject) {
+            Mail::mailer(config('mail.default', 'sendmail'))->raw($bodyContent, function ($message) use ($fromEmail, $fromName, $to, $subject) {
                 $message->from($fromEmail, $fromName)
                         ->to($to)
                         ->subject($subject);
             });
             return true;
-        } catch (Exception $e) {
-            Log::error("SMTP Outbound Error: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::warning("Laravel Mailer Attempt Failed: " . $e->getMessage() . ". Trying fallback pipe to sendmail...");
+        }
+
+        // 2. Fallback: Langsung pipe ke binary Postfix sendmail (/usr/sbin/sendmail) di Linux VPS
+        if (PHP_OS_FAMILY === 'Linux' && file_exists('/usr/sbin/sendmail')) {
+            try {
+                $headers = "From: {$fromName} <{$fromEmail}>\r\n" .
+                           "Reply-To: {$fromEmail}\r\n" .
+                           "X-Mailer: MailIDS-Engine/1.0\r\n" .
+                           "Content-Type: text/plain; charset=utf-8\r\n";
+
+                $rawMsg = "To: {$to}\r\n" .
+                          $headers .
+                          "Subject: {$subject}\r\n\r\n" .
+                          $bodyContent . "\r\n";
+
+                $pipe = @popen("/usr/sbin/sendmail -t -i -f " . escapeshellarg($fromEmail), "w");
+                if ($pipe) {
+                    fwrite($pipe, $rawMsg);
+                    $returnCode = pclose($pipe);
+                    if ($returnCode === 0) {
+                        return true;
+                    }
+                }
+            } catch (\Throwable $fallbackEx) {
+                Log::error("Sendmail binary pipe error: " . $fallbackEx->getMessage());
+            }
+        }
+
+        // 3. Fallback PHP mail()
+        try {
+            $headers = "From: {$fromName} <{$fromEmail}>\r\n" .
+                       "Reply-To: {$fromEmail}\r\n" .
+                       "X-Mailer: PHP/" . phpversion();
+            return @mail($to, $subject, $bodyContent, $headers, "-f " . $fromEmail);
+        } catch (\Throwable $lastEx) {
+            Log::error("Final mail() fallback failed: " . $lastEx->getMessage());
             return false;
         }
     }
