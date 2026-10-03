@@ -94,6 +94,11 @@ postconf -e "smtpd_sasl_path = private/auth"
 postconf -e "smtpd_sasl_auth_enable = yes"
 postconf -e "smtpd_recipient_restrictions = permit_sasl_authenticated,permit_mynetworks,reject_unauth_destination"
 
+# Batas Ukuran Pesan & Lampiran Email (Default 50 MB)
+postconf -e "message_size_limit = 52428800"
+postconf -e "virtual_mailbox_limit = 0"
+postconf -e "mailbox_size_limit = 0"
+
 echo "======================================================"
 echo " 6. Konfigurasi Dovecot (Auth, Mailbox & Socket SASL)"
 echo "======================================================"
