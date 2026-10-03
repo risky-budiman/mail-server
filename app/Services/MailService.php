@@ -70,12 +70,17 @@ class MailService
      */
     public static function sendOutboundMail(string $fromEmail, string $fromName, string $to, string $subject, string $bodyContent): bool
     {
-        // 1. Coba kirim via Laravel Mailer terlebih dahulu
+        $domain = explode('@', $fromEmail)[1] ?? 'sahabatit.my.id';
+        $messageId = '<' . time() . '.' . bin2hex(random_bytes(8)) . '@' . $domain . '>';
+        $dateRfc2822 = date('r');
+
+        // 1. Coba kirim via Laravel Mailer SMTP / Sendmail
         try {
-            Mail::mailer(config('mail.default', 'sendmail'))->raw($bodyContent, function ($message) use ($fromEmail, $fromName, $to, $subject) {
+            Mail::mailer(config('mail.default', 'sendmail'))->html($bodyContent, function ($message) use ($fromEmail, $fromName, $to, $subject, $messageId) {
                 $message->from($fromEmail, $fromName)
                         ->to($to)
                         ->subject($subject);
+                $message->getHeaders()->addIdHeader('Message-ID', $messageId);
             });
             return true;
         } catch (\Throwable $e) {
@@ -85,16 +90,25 @@ class MailService
         // 2. Fallback: Langsung pipe ke binary Postfix sendmail (/usr/sbin/sendmail) di Linux VPS
         if (PHP_OS_FAMILY === 'Linux' && file_exists('/usr/sbin/sendmail')) {
             try {
+                // Header lengkap standar RFC 5322 agar 100% lolos filter Gmail / Yahoo
                 $headers = "From: {$fromName} <{$fromEmail}>\r\n" .
-                           "Reply-To: {$fromEmail}\r\n" .
-                           "X-Mailer: MailIDS-Engine/1.0\r\n" .
-                           "Content-Type: text/plain; charset=utf-8\r\n";
+                           "Reply-To: {$fromName} <{$fromEmail}>\r\n" .
+                           "Date: {$dateRfc2822}\r\n" .
+                           "Message-ID: {$messageId}\r\n" .
+                           "MIME-Version: 1.0\r\n" .
+                           "X-Mailer: MailIDS-Webmail/1.0\r\n" .
+                           "Content-Type: text/html; charset=UTF-8\r\n" .
+                           "Content-Transfer-Encoding: 8bit\r\n";
+
+                $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+                $formattedContent = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
 
                 $rawMsg = "To: {$to}\r\n" .
-                          $headers .
-                          "Subject: {$subject}\r\n\r\n" .
-                          $bodyContent . "\r\n";
+                          "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n" .
+                          $headers . "\r\n" .
+                          $formattedContent . "\r\n";
 
+                // Kirim dengan parameter -f agar Return-Path cocok dengan pengirim (SPF alignment)
                 $pipe = @popen("/usr/sbin/sendmail -t -i -f " . escapeshellarg($fromEmail), "w");
                 if ($pipe) {
                     fwrite($pipe, $rawMsg);
@@ -112,6 +126,10 @@ class MailService
         try {
             $headers = "From: {$fromName} <{$fromEmail}>\r\n" .
                        "Reply-To: {$fromEmail}\r\n" .
+                       "Date: {$dateRfc2822}\r\n" .
+                       "Message-ID: {$messageId}\r\n" .
+                       "MIME-Version: 1.0\r\n" .
+                       "Content-Type: text/plain; charset=UTF-8\r\n" .
                        "X-Mailer: PHP/" . phpversion();
             return @mail($to, $subject, $bodyContent, $headers, "-f " . $fromEmail);
         } catch (\Throwable $lastEx) {
