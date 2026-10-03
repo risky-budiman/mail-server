@@ -29,30 +29,40 @@ new class extends Component
         // Otomatisasi generate DKIM & konfigurasi OpenDKIM di Linux VPS
         if (PHP_OS_FAMILY === 'Linux') {
             try {
-                $script = base_path('scripts/add-domain-dkim.sh');
-                if (file_exists($script)) {
-                    @exec("sudo {$script} " . escapeshellarg($newDomain->name) . " > /dev/null 2>&1 &");
-                }
+                \Illuminate\Support\Facades\Artisan::call('mail:sync-dkim', ['--domain' => $newDomain->name]);
             } catch (\Throwable $e) {
-                // Log atau abaikan jika bukan di environment VPS
+                // Log atau fallback
             }
         }
 
         $this->reset(['name', 'description']);
         $this->is_active = true;
-        session()->flash('message', 'Domain baru berhasil ditambahkan! Kunci DKIM 2048-bit otomatis digenerate untuk Anti-Spam.');
+        session()->flash('message', 'Domain baru berhasil ditambahkan! Kunci DKIM 2048-bit otomatis digenerate & OpenDKIM disinkronkan.');
     }
 
     public function toggleStatus($domainId)
     {
         $domain = VirtualDomain::findOrFail($domainId);
         $domain->update(['is_active' => !$domain->is_active]);
+
+        if (PHP_OS_FAMILY === 'Linux') {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('mail:sync-dkim');
+            } catch (\Throwable $e) {}
+        }
     }
 
     public function deleteDomain($domainId)
     {
         $domain = VirtualDomain::withCount('users')->findOrFail($domainId);
         $domain->delete();
+
+        if (PHP_OS_FAMILY === 'Linux') {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('mail:sync-dkim');
+            } catch (\Throwable $e) {}
+        }
+
         session()->flash('message', 'Domain dan akun terkait berhasil dihapus.');
     }
 

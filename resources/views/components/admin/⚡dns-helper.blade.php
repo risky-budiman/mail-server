@@ -50,15 +50,12 @@ new class extends Component
             }
         }
 
-        // 2. Jika file belum ada di Linux dan OpenDKIM terinstall, coba generate key pair riil via opendkim-genkey
-        if (PHP_OS_FAMILY === 'Linux' && file_exists('/usr/bin/opendkim-genkey')) {
+        // 2. Jika file belum ada di Linux, jalankan sinkronisasi artisan command otomatis
+        if (PHP_OS_FAMILY === 'Linux') {
             try {
-                $keyDir = "/etc/opendkim/keys/{$domainName}";
-                @mkdir($keyDir, 0750, true);
-                @exec("opendkim-genkey -b 2048 -d " . escapeshellarg($domainName) . " -D " . escapeshellarg($keyDir) . " -s default 2>/dev/null");
-                @exec("chown -R opendkim:opendkim " . escapeshellarg($keyDir) . " 2>/dev/null");
+                \Illuminate\Support\Facades\Artisan::call('mail:sync-dkim', ['--domain' => $domainName]);
                 
-                $txtFile = "{$keyDir}/default.txt";
+                $txtFile = "/etc/opendkim/keys/{$domainName}/default.txt";
                 if (file_exists($txtFile) && is_readable($txtFile)) {
                     $content = @file_get_contents($txtFile);
                     if ($content && preg_match('/p=([a-zA-Z0-9+\/]+)/s', str_replace(['"', ' ', "\r", "\n", "\t"], '', $content), $matches)) {
@@ -67,11 +64,11 @@ new class extends Component
                     }
                 }
             } catch (\Throwable $e) {
-                // fallback
+                // fallback jika non-privileged
             }
         }
 
-        // 3. Fallback: Generate OpenSSL RSA Keypair dinamis 2048-bit agar kunci valid & unik
+        // 3. Fallback: Generate OpenSSL RSA Keypair dinamis 2048-bit agar kunci valid & konsisten
         try {
             $cacheKey = "dkim_pubkey_{$domainName}";
             $cachedKey = cache()->get($cacheKey);
@@ -98,6 +95,17 @@ new class extends Component
         }
 
         $this->dkimPublicKey = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyX5t9v8qL...QIDAQAB';
+    }
+
+    public function syncAllDkimNow()
+    {
+        try {
+            \Illuminate\Support\Facades\Artisan::call('mail:sync-dkim');
+            $this->detectDkimPublicKey();
+            session()->flash('sync_msg', 'Berhasil! Kunci DKIM, SigningTable, KeyTable, dan TrustedHosts telah disinkronkan untuk semua domain.');
+        } catch (\Throwable $e) {
+            session()->flash('sync_err', 'Gagal sinkronisasi: ' . $e->getMessage());
+        }
     }
 
     public function detectServerPublicIp()
@@ -232,13 +240,32 @@ new class extends Component
                 Panduan DNS otomatis untuk semua domain bisnis Anda yang dilayani oleh 1 server host utama: <span class="font-mono text-cyan-300 font-bold">{{ $primaryMailHost }}</span>.
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
+            <button wire:click="syncAllDkimNow" wire:loading.attr="disabled" type="button"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/30 cursor-pointer disabled:opacity-50">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5" wire:loading.class="animate-spin"></i>
+                <span wire:loading.remove wire:target="syncAllDkimNow">Sinkronkan OpenDKIM Server</span>
+                <span wire:loading wire:target="syncAllDkimNow">Menyinkronkan...</span>
+            </button>
             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
                 <i data-lucide="server" class="w-3.5 h-3.5"></i>
                 <span>Primary Host: {{ $primaryMailHost }}</span>
             </span>
         </div>
     </div>
+
+    @if (session()->has('sync_msg'))
+        <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+            <span>{{ session('sync_msg') }}</span>
+        </div>
+    @endif
+    @if (session()->has('sync_err'))
+        <div class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400"></i>
+            <span>{{ session('sync_err') }}</span>
+        </div>
+    @endif
 
     <!-- Parameter Konfigurasi Domain & IP -->
     <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 backdrop-blur-md">
