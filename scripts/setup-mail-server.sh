@@ -20,7 +20,10 @@ echo ">>> Menjalankan Setup Mail Engine untuk: ${HOSTNAME}"
 echo ">>> Database: ${DB_NAME} (User: ${DB_USER})"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql opendkim opendkim-tools ufw imapsync
+apt-get install -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql opendkim opendkim-tools ufw
+
+# Install imapsync secara graceful jika tersedia di repositori sistem
+apt-get install -y imapsync 2>/dev/null || true
 
 # Pastikan www-data dapat membaca log mail sistem (/var/log/mail.log) jika Nginx terpasang
 usermod -a -G adm www-data || true

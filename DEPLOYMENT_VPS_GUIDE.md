@@ -45,10 +45,10 @@ Sebelum memulai, siapkan hal-hal berikut:
 
 Saat Anda baru pertama kali membeli VPS Ubuntu kosong, jalankan perintah berikut untuk menginstal semua paket dasar (Web Server, Database, PHP 8.2/8.3, Node.js, Composer, Git, dan alat migrasi `imapsync`):
 
-### A. Update Sistem & Install Utilitas Dasar + IMAPSync
+### A. Update Sistem & Install Utilitas Dasar
 ```bash
 sudo apt-get update -y && sudo apt-get upgrade -y
-sudo apt-get install -y curl wget git unzip zip software-properties-common ca-certificates gnupg lsb-release ufw htop imapsync
+sudo apt-get install -y curl wget git unzip zip software-properties-common ca-certificates gnupg lsb-release ufw htop
 ```
 
 ### B. Install Nginx Web Server & Database MariaDB / MySQL
