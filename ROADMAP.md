@@ -54,6 +54,11 @@ graph TD
   - Pengaturan kuota penyimpanan email & path Maildir otomatis (`/var/vmail/domain/user/`).
 - [x] **1.3.3** CRUD Alias & Forwarding (`virtual_aliases`): Pengalihan email masuk ke akun internal maupun eksternal.
 - [x] **1.3.4** Dashboard Analisis: Total akun aktif, kapasitas terpakai, utilisasi storage, status kesiapan Postfix & Dovecot.
+- [x] **1.3.5** **Tool Migrasi Email (Hostinger / cPanel to Self-Hosted)**:
+  - Sinkronisasi IMAP otomatis langsung antar-server (Inbox, Sent, Drafts, Trash).
+  - Importer file backup email (`.eml` & `.zip`).
+  - Terminal live logger & progress status migrasi.
+  - Panduan interaktif langkah-demi-langkah (Hostinger settings, `imapsync` CLI, & cutover DNS MX).
 
 ---
 

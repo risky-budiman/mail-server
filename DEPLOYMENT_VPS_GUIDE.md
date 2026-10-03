@@ -1,4 +1,4 @@
-# 🚀 Panduan Lengkap Deployment Mail Server & Web Portal (MailIDS) ke VPS Production
+# 🚀 Panduan Lengkap Deployment Mail Server & Web Portal (MailIDS) ke VPS On-Premise / Production
 
 Dokumen ini berisi panduan *step-by-step* yang komprehensif untuk memasang, mengonfigurasi, dan meluncurkan sistem Mail Server mandiri (Postfix + Dovecot) beserta Web Portal Admin & Webmail Client Laravel di VPS Linux Ubuntu (22.04 / 24.04 LTS).
 
@@ -9,12 +9,14 @@ Dokumen ini berisi panduan *step-by-step* yang komprehensif untuk memasang, meng
 2. [Checklist Pra-Instalasi (Sebelum Sentuh VPS)](#2-checklist-pra-instalasi)
 3. [Langkah 1: Persiapan VPS Baru & Instalasi Paket Sistem Dasar (OS Packages)](#3-langkah-1-persiapan-vps-baru--instalasi-paket-sistem-dasar-os-packages)
 4. [Langkah 2: Setup Hostname & Reverse DNS (rDNS/PTR)](#4-langkah-2-setup-hostname--reverse-dns-rdnsptr)
-5. [Langkah 3: Instalasi & Konfigurasi Engine Mail Server (Postfix + Dovecot)](#5-langkah-3-instalasi--konfigurasi-engine-mail-server-postfix--dovecot)
-6. [Langkah 4: Menyiapkan Web Portal Laravel di Nginx & PHP 8.2+](#6-langkah-4-menyiapkan-web-portal-laravel-di-nginx)
-7. [Langkah 5: Setup Sertifikat SSL Gratis (Let's Encrypt / Certbot)](#7-langkah-5-setup-sertifikat-ssl-gratis-lets-encrypt)
-8. [Langkah 6: Konfigurasi DNS di Registrar Domain (Cloudflare, dll)](#8-langkah-6-konfigurasi-dns-di-registrar-domain)
-9. [Langkah 7: Pengujian Skor Email 10/10 (Masuk Inbox)](#9-langkah-7-pengujian-skor-email-1010-masuk-inbox)
-10. [Perawatan & Troubleshooting](#10-perawatan--troubleshooting)
+5. [Langkah 3: Instalasi & Konfigurasi Engine Mail Server (Postfix + Dovecot + OpenDKIM)](#5-langkah-3-instalasi--konfigurasi-engine-mail-server-postfix--dovecot--opendkim)
+6. [Langkah 4: Menyiapkan Web Portal Laravel & Webmail di Nginx](#6-langkah-4-menyiapkan-web-portal-laravel--webmail-di-nginx)
+7. [Langkah 5: Hak Akses Sudoer Khusus Fitur 1-Click Installer UI & Log Viewer](#7-langkah-5-hak-akses-sudoer-khusus-fitur-1-click-installer-ui--log-viewer)
+8. [Langkah 6: Setup Sertifikat SSL Gratis (Let's Encrypt / Certbot)](#8-langkah-6-setup-sertifikat-ssl-gratis-lets-encrypt)
+9. [Langkah 7: Konfigurasi DNS di Registrar Domain (Cloudflare, dll)](#9-langkah-7-konfigurasi-dns-di-registrar-domain)
+10. [Langkah 8: Pengujian Skor Email 10/10 (Masuk Inbox)](#10-langkah-8-pengujian-skor-email-1010-masuk-inbox)
+11. [Langkah 9: Panduan Migrasi Akun Email Lama (Hostinger / cPanel via IMAPSync)](#11-langkah-9-panduan-migrasi-akun-email-lama-hostinger--cpanel-via-imapsync)
+12. [Perawatan, Queue Worker, & Troubleshooting](#12-perawatan-queue-worker--troubleshooting)
 
 ---
 
@@ -39,16 +41,14 @@ Sebelum memulai, siapkan hal-hal berikut:
 
 ---
 
----
-
 ## 3. Langkah 1: Persiapan VPS Baru & Instalasi Paket Sistem Dasar (OS Packages)
 
-Saat Anda baru pertama kali membeli VPS Ubuntu kosong, jalankan perintah berikut untuk menginstal semua paket dasar (Web Server, Database, PHP 8.2+, Node.js, Composer, dan Git):
+Saat Anda baru pertama kali membeli VPS Ubuntu kosong, jalankan perintah berikut untuk menginstal semua paket dasar (Web Server, Database, PHP 8.2/8.3, Node.js, Composer, Git, dan alat migrasi `imapsync`):
 
-### A. Update Sistem & Install Utilitas Dasar
+### A. Update Sistem & Install Utilitas Dasar + IMAPSync
 ```bash
 sudo apt-get update -y && sudo apt-get upgrade -y
-sudo apt-get install -y curl wget git unzip zip software-properties-common ca-certificates gnupg lsb-release ufw htop
+sudo apt-get install -y curl wget git unzip zip software-properties-common ca-certificates gnupg lsb-release ufw htop imapsync
 ```
 
 ### B. Install Nginx Web Server & Database MariaDB / MySQL
@@ -74,10 +74,12 @@ FLUSH PRIVILEGES;
 "
 ```
 
-### C. Install PHP 8.2 / 8.3 & Ekstensi yang Dibutuhkan Laravel
+### C. Install PHP & Ekstensi yang Dibutuhkan Laravel & Webmail (IMAP)
 ```bash
 sudo add-apt-repository ppa:ondrej/php -y
 sudo apt-get update -y
+
+# Untuk Ubuntu dengan PHP 8.2 (atau ganti 8.3 sesuai preferensi):
 sudo apt-get install -y php8.2 php8.2-fpm php8.2-cli php8.2-common php8.2-mysql php8.2-sqlite3 \
     php8.2-zip php8.2-gd php8.2-mbstring php8.2-curl php8.2-xml php8.2-bcmath php8.2-intl \
     php8.2-readline php8.2-imap php8.2-soap
@@ -124,15 +126,7 @@ Buka panel provider VPS Anda (misal panel Contabo, Hetzner, atau DigitalOcean) p
 
 ## 5. Langkah 3: Instalasi & Konfigurasi Engine Mail Server (Postfix + Dovecot + OpenDKIM)
 
-Proyek ini telah dilengkapi skrip instalasi otomatis siap pakai: [setup-mail-server.sh](file:///d:/AI%20Code/mailids/scripts/setup-mail-server.sh).
-
-### 💡 Kapan dan dari Mana Skrip Ini Dijalankan?
-- **Kapan Dijalankan?**
-  Skrip ini dijalankan **SATU KALI SAJA** pada awal setup server, yaitu tepat setelah Anda selesai menginstal paket dasar OS (Langkah 1) dan membuat database MySQL `mailportal` serta menyetel Hostname VPS (Langkah 2).
-- **Dari Mana Dijalankan?**
-  Dijalankan langsung dari **Terminal SSH di VPS Anda**, tepat di dalam folder root aplikasi (`/var/www/mailids`).
-
----
+Proyek ini telah dilengkapi skrip instalasi otomatis siap pakai: `scripts/setup-mail-server.sh`.
 
 ### A. Unggah / Kloning Folder Proyek ke VPS
 Login ke VPS via SSH dari komputer lokal Anda:
@@ -148,28 +142,8 @@ cd /var/www/mailids
 
 ### B. Cara Menjalankan Instalasi Mail Engine (Pilih Salah Satu)
 
-Anda memiliki **3 pilihan cara yang sangat fleksibel**:
-
-#### Pilihan 1: Jalankan Perintah Paket Manual (Jika Ingin Install Paket Satu per Satu)
-Jika Anda ingin melihat atau mengeksekusi langsung paket instalasi Postfix & Dovecot dari apt:
-```bash
-# 1. Update repositori
-sudo apt-get update -y
-
-# 2. Install Postfix & Modul MySQL
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postfix postfix-mysql
-
-# 3. Install Dovecot Core, IMAP, POP3, LMTP & Driver MySQL
-sudo apt-get install -y dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql
-
-# 4. Install OpenDKIM & Firewall UFW
-sudo apt-get install -y opendkim opendkim-tools ufw
-```
-
----
-
-#### Pilihan 2: Eksekusi Skrip Otomasi Terpadu (Direkomendasikan - Paling Cepat & Akurat)
-Skrip `setup-mail-server.sh` di dalam folder proyek sudah merangkum seluruh perintah `apt-get` di atas sekaligus **mengonfigurasi file Postfix (`main.cf`), Dovecot (`dovecot-sql.conf.ext`), Maildir storage (`/var/vmail/`), dan OpenDKIM** secara otomatis dalam 1 menit:
+#### Pilihan 1: Eksekusi Skrip Otomasi Terpadu (Direkomendasikan - Paling Cepat & Akurat)
+Skrip `setup-mail-server.sh` di dalam folder proyek sudah merangkum seluruh perintah `apt-get` sekaligus **mengonfigurasi file Postfix (`main.cf`), Dovecot (`dovecot-sql.conf.ext`), Maildir storage (`/var/vmail/`), OpenDKIM, dan penyesuaian hak akses log grup `adm`** secara otomatis dalam 1 menit:
 ```bash
 # Berikan izin eksekusi
 chmod +x scripts/setup-mail-server.sh
@@ -181,54 +155,79 @@ sudo DOMAIN="perusahaan.co.id" DB_PASS="StrongSecretPassword123!" bash scripts/s
 
 ---
 
-#### Pilihan 3: Menggunakan Tombol Menu Web Portal (1-Click UI)
-1. Buka Web Portal Admin Anda di browser: `http://IP_VPS_ANDA/admin/login`
-2. Klik menu **"1-Click Server Installer"** di bilah navigasi kiri.
-3. Masukkan domain bisnis Anda dan klik tombol **"Jalankan Instalasi Mail Engine Sekarang"**.
-4. Konsol log interaktif di layar akan menampilkan proses instalasi Postfix, Dovecot, OpenDKIM, dan Firewall secara real-time sampai selesai.
+#### Pilihan 2: Menggunakan Tombol Menu Web Portal (1-Click UI)
+1. Siapkan terlebih dahulu web portal (Langkah 4) & hak akses sudoer (Langkah 5).
+2. Buka Web Portal Admin Anda di browser: `http://IP_VPS_ANDA/admin/login` (atau via nama domain).
+3. Klik menu **"1-Click Server Installer"** di bilah navigasi kiri.
+4. Masukkan domain bisnis Anda dan klik tombol **"Jalankan Instalasi Mail Engine Sekarang"**.
+5. Konsol log interaktif di layar akan menampilkan proses instalasi Postfix, Dovecot, OpenDKIM, dan Firewall secara real-time sampai selesai.
 
 ---
 
-**Rincian Komponen Paket Mail Server yang Diinstal:**
-1. **Postfix (MTA Engine):**
-   - Menangani pengiriman (*outbound*) dan penerimaan (*inbound*) email di port 25, 587, dan 465.
-   - Terintegrasi dengan modul `postfix-mysql` untuk membaca akun dan domain langsung dari database.
-2. **Dovecot (IMAP/POP3 & SASL Auth):**
-   - Paket `dovecot-core`, `dovecot-imapd`, `dovecot-pop3d`, dan `dovecot-lmtpd`.
-   - Mengelola kotak surat (*Maildir*) dan sinkronisasi email ke Thunderbird, Outlook, smartphone, dan Webmail di port 993 (SSL).
-   - Menyediakan jembatan autentikasi SASL socket (`/var/spool/postfix/private/auth`) agar Postfix hanya mengizinkan pengiriman email dari user yang memiliki akun terdaftar.
-3. **OpenDKIM & OpenDKIM-Tools:**
-   - Menandatangani (*digital signature*) setiap email keluar dengan kunci kriptografi RSA agar tidak dianggap email penipuan/spoofing oleh Google Gmail dan Yahoo.
-4. **User Sistem & Storage Maildir:**
-   - Membuat user sistem terisolasi `vmail:vmail` (UID/GID 5000) dengan struktur direktori fisik `/var/vmail/%d/%n`.
-5. **Firewall Rules (UFW):**
-   - Membuka port: `25` (SMTP), `587` (Submission), `465` (SMTPS), `993` (IMAPS), `80` (HTTP), dan `443` (HTTPS).
+## 6. Langkah 4: Menyiapkan Web Portal Laravel & Webmail di Nginx
 
----
-
-## 6. Langkah 4: Menyiapkan Web Portal Laravel di Nginx
-
-### A. Environment & Dependensi
-Di folder `/var/www/mailids`, buat file `.env`:
+### A. Environment Production (.env)
+Di folder `/var/www/mailids`, buat atau sesuaikan file `.env`:
 ```bash
 cp .env.example .env
+nano .env
+```
+Pastikan variabel kunci disetel untuk mode produksi:
+```ini
+APP_NAME="MailIDS Portal"
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://mail.perusahaan.co.id
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=mailportal
+DB_USERNAME=mailuser
+DB_PASSWORD=StrongSecretPassword123!
+
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+
+# Konfigurasi SMTP Outbound Postfix Lokal
+MAIL_MAILER=smtp
+MAIL_SCHEME=null
+MAIL_HOST=127.0.0.1
+MAIL_PORT=587
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="no-reply@perusahaan.co.id"
+MAIL_FROM_NAME="MailIDS System"
+
+# Konfigurasi IMAP Dovecot Lokal untuk Webmail Client
+IMAP_HOST=127.0.0.1
+IMAP_PORT=993
+IMAP_ENCRYPTION=ssl
+IMAP_VALIDATE_CERT=false
+```
+
+Jalankan instalasi dependensi, migrasi, dan build aset:
+```bash
 composer install --no-dev --optimize-autoloader
+npm install
 npm run build
 php artisan key:generate
-php artisan migrate --seed
+php artisan migrate --force
+php artisan db:seed --force
 php artisan storage:link
 ```
 
 Set hak akses direktori Laravel:
 ```bash
-chown -R www-data:www-data /var/www/mailids/storage /var/www/mailids/bootstrap/cache
+chown -R www-data:www-data /var/www/mailids
 chmod -R 775 /var/www/mailids/storage /var/www/mailids/bootstrap/cache
 ```
 
 ### B. Konfigurasi Nginx Web Server
 Buat file virtual host Nginx:
 ```bash
-nano /etc/nginx/sites-available/mailids.conf
+sudo nano /etc/nginx/sites-available/mailids.conf
 ```
 Isi konfigurasi berikut:
 ```nginx
@@ -253,9 +252,10 @@ server {
     error_page 404 /index.php;
 
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock; # Sesuaikan versi PHP Anda
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock; # Sesuaikan jika menggunakan php8.3-fpm
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
+        fastcgi_read_timeout 300;
     }
 
     location ~ /\.(?!well-known).* {
@@ -265,38 +265,66 @@ server {
 ```
 Aktifkan konfigurasi dan reload Nginx:
 ```bash
-ln -s /etc/nginx/sites-available/mailids.conf /etc/nginx/sites-enabled/
-nginx -t
-systemctl reload nginx
+sudo ln -s /etc/nginx/sites-available/mailids.conf /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 ---
 
-## 6. Langkah 4: Setup Sertifikat SSL Gratis (Let's Encrypt)
+## 7. Langkah 5: Hak Akses Sudoer Khusus Fitur 1-Click Installer UI & Log Viewer
+
+Agar fitur **1-Click Server Installer UI** dan **Log Viewer** di portal admin dapat mengeksekusi skrip engine dan membaca `/var/log/mail.log` tanpa hambatan izin permission Linux:
+
+### A. Izinkan `www-data` Membaca Log Sistem
+```bash
+sudo usermod -a -G adm www-data
+```
+
+### B. Setup Sudoers Khusus untuk Installer & Postfix Reload
+Buat file konfigurasi sudoers khusus untuk user web server:
+```bash
+sudo visudo -f /etc/sudoers.d/mailids-portal
+```
+Masukkan baris berikut:
+```text
+www-data ALL=(ALL) NOPASSWD: /bin/bash /var/www/mailids/scripts/setup-mail-server.sh
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/postconf
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload postfix
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload dovecot
+```
+Simpan file tersebut dan atur izinnya:
+```bash
+sudo chmod 0440 /etc/sudoers.d/mailids-portal
+```
+
+---
+
+## 8. Langkah 6: Setup Sertifikat SSL Gratis (Let's Encrypt / Certbot)
 
 Amankan web portal dan engine mail server dengan sertifikat SSL resmi:
 ```bash
-apt-get install -y certbot python3-certbot-nginx
-certbot --nginx -d mail.perusahaan.co.id
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d mail.perusahaan.co.id
 ```
 
 Tautkan sertifikat Let's Encrypt ke Postfix dan Dovecot:
 ```bash
 # Untuk Postfix
-postconf -e "smtpd_tls_cert_file = /etc/letsencrypt/live/mail.perusahaan.co.id/fullchain.pem"
-postconf -e "smtpd_tls_key_file = /etc/letsencrypt/live/mail.perusahaan.co.id/privkey.pem"
-postconf -e "smtpd_use_tls = yes"
+sudo postconf -e "smtpd_tls_cert_file = /etc/letsencrypt/live/mail.perusahaan.co.id/fullchain.pem"
+sudo postconf -e "smtpd_tls_key_file = /etc/letsencrypt/live/mail.perusahaan.co.id/privkey.pem"
+sudo postconf -e "smtpd_use_tls = yes"
 
 # Untuk Dovecot (/etc/dovecot/conf.d/10-ssl.conf)
-sed -i 's|^ssl_cert = .*|ssl_cert = </etc/letsencrypt/live/mail.perusahaan.co.id/fullchain.pem|' /etc/dovecot/conf.d/10-ssl.conf
-sed -i 's|^ssl_key = .*|ssl_key = </etc/letsencrypt/live/mail.perusahaan.co.id/privkey.pem|' /etc/dovecot/conf.d/10-ssl.conf
+sudo sed -i 's|^ssl_cert = .*|ssl_cert = </etc/letsencrypt/live/mail.perusahaan.co.id/fullchain.pem|' /etc/dovecot/conf.d/10-ssl.conf
+sudo sed -i 's|^ssl_key = .*|ssl_key = </etc/letsencrypt/live/mail.perusahaan.co.id/privkey.pem|' /etc/dovecot/conf.d/10-ssl.conf
 
-systemctl restart postfix dovecot
+sudo systemctl restart postfix dovecot
 ```
 
 ---
 
-## 7. Langkah 5: Konfigurasi DNS di Registrar Domain
+## 9. Langkah 7: Konfigurasi DNS di Registrar Domain
 
 Buka panel DNS domain Anda (Cloudflare, Niagahoster, Domainesia, dsb.), lalu masukkan tabel DNS yang sudah digenerate otomatis oleh portal di menu **DNS & Security Guide**:
 
@@ -312,7 +340,7 @@ Buka panel DNS domain Anda (Cloudflare, Niagahoster, Domainesia, dsb.), lalu mas
 
 ---
 
-## 8. Langkah 6: Pengujian Skor Email 10/10 (Masuk Inbox)
+## 10. Langkah 8: Pengujian Skor Email 10/10 (Masuk Inbox)
 
 1. Buka situs [https://www.mail-tester.com](https://www.mail-tester.com).
 2. Salin alamat email sementara yang diberikan (misal: `test-xyz123@mail-tester.com`).
@@ -322,10 +350,53 @@ Buka panel DNS domain Anda (Cloudflare, Niagahoster, Domainesia, dsb.), lalu mas
 
 ---
 
-## 9. Perawatan & Troubleshooting
+## 11. Langkah 9: Panduan Migrasi Akun Email Lama (Hostinger / cPanel via IMAPSync)
+
+Jika Anda memindahkan mailbox dari cPanel / Hostinger:
+
+1. Buka menu **"Email Migration Tool"** di Admin Web Portal (`/admin/migration`).
+2. Masukkan kredensial IMAP server lama (contoh: `imap.hostinger.com`, Port 993, SSL) dan pilih akun target lokal yang sudah dibuat di menu Manajemen User.
+3. Klik **"Uji Koneksi & Mulai Sinkronisasi"**.
+4. Atau jika ingin migrasi massal seluruh mailbox via terminal VPS menggunakan `imapsync`:
+```bash
+imapsync \
+  --host1 imap.hostinger.com --user1 user@perusahaan.co.id --pass1 "PasswordLama" --ssl1 \
+  --host2 127.0.0.1 --user2 user@perusahaan.co.id --pass2 "PasswordBaru" --ssl2
+```
+
+---
+
+## 12. Perawatan, Queue Worker, & Troubleshooting
+
+### Setup Supervisor untuk Antrean (Queue Worker)
+Agar sinkronisasi migrasi dan pengiriman antrean berjalan otomatis di latar belakang, pasang Supervisor:
+```bash
+sudo apt-get install -y supervisor
+```
+Buat file konfigurasi `/etc/supervisor/conf.d/mailids-worker.conf`:
+```ini
+[program:mailids-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/mailids/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/www/mailids/storage/logs/worker.log
+stopwaitsecs=3600
+```
+Jalankan supervisor:
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start mailids-worker:*
+```
 
 ### Memantau Log Server
-Untuk melihat aktivitas pengiriman atau mendeteksi kendala, Anda dapat memantau langsung melalui panel admin pada menu **Mail Logs & Engine Monitor** atau via terminal:
+Anda dapat memantau langsung melalui panel admin pada menu **Mail Logs & Engine Monitor** (`/admin/logs`) atau via terminal:
 ```bash
 tail -f /var/log/mail.log
 ```
@@ -343,11 +414,11 @@ postsuper -d ALL
 ```
 
 ### Backup Konfigurasi & Data Akun
-Gunakan perintah artisan yang sudah kita siapkan:
+Gunakan perintah artisan:
 ```bash
 php artisan mail:backup
 ```
 File cadangan berformat JSON akan tersimpan di `storage/app/backups/`.
 
 ---
-*Dokumentasi ini siap digunakan kapan saja begitu VPS Anda aktif!*
+*Dokumentasi ini 100% mutakhir dan selaras dengan seluruh modul MailIDS yang aktif.*

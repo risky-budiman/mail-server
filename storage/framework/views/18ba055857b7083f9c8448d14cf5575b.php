@@ -852,20 +852,21 @@ new class extends Component
 
             <!-- Active Folder Indicator Badge -->
             <div class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 font-medium">
-                <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : 'folder')))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <i data-lucide="<?php echo e($activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : 'folder'))))); ?>" class="w-3.5 h-3.5 text-cyan-400"></i>
                 <span class="text-slate-400">Folder:</span>
                 <span class="font-bold text-white capitalize">
-                    {{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}
+                    <?php echo e($activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder))))); ?>
+
                 </span>
             </div>
         </div>
 
-        @if (session()->has('webmail_msg'))
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session()->has('webmail_msg')): ?>
             <div class="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 shadow-sm animate-pulse">
                 <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
-                <span>{{ session('webmail_msg') }}</span>
+                <span><?php echo e(session('webmail_msg')); ?></span>
             </div>
-        @endif
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
         <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 shadow-inner">
@@ -893,25 +894,26 @@ new class extends Component
                 </div>
 
                 <!-- Inbox dengan Tombol Refresh (Gaya Hostinger) -->
-                <div class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                <div class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all group <?php echo e($activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'); ?>">
                     <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false" class="flex-1 flex items-center gap-2.5 truncate text-left">
-                        <div class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
+                        <div class="p-1 rounded-lg <?php echo e($activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400'); ?>">
                             <i data-lucide="inbox" class="w-3.5 h-3.5"></i>
                         </div>
                         <span class="truncate">Kotak Masuk</span>
                     </button>
                     
                     <div class="flex items-center gap-1.5 shrink-0">
-                        @if($counts['inbox'] > 0)
-                            <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' }} font-bold">
-                                {{ $counts['inbox'] }}
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($counts['inbox'] > 0): ?>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full <?php echo e($activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'); ?> font-bold">
+                                <?php echo e($counts['inbox']); ?>
+
                             </span>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         
                         <!-- Tombol Refresh Kotak Masuk -->
                         <button type="button" 
                                 wire:click.stop="refreshInbox" 
-                                class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'text-white/80 hover:text-white hover:bg-white/20' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800' }} transition-all"
+                                class="p-1 rounded-lg <?php echo e($activeFolder === 'inbox' ? 'text-white/80 hover:text-white hover:bg-white/20' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800'); ?> transition-all"
                                 title="Segarkan Kotak Masuk">
                             <i data-lucide="rotate-cw" class="w-3.5 h-3.5" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
                         </button>
@@ -920,9 +922,9 @@ new class extends Component
 
                 <!-- Sent -->
                 <button wire:click="selectFolder('sent')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group <?php echo e($activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'); ?>">
                     <div class="flex items-center gap-2.5">
-                        <div class="p-1 rounded-lg {{ $activeFolder === 'sent' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-indigo-400' }}">
+                        <div class="p-1 rounded-lg <?php echo e($activeFolder === 'sent' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-indigo-400'); ?>">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i>
                         </div>
                         <span>Terkirim</span>
@@ -931,41 +933,43 @@ new class extends Component
 
                 <!-- Drafts -->
                 <button wire:click="selectFolder('drafts')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group <?php echo e($activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'); ?>">
                     <div class="flex items-center gap-2.5">
-                        <div class="p-1 rounded-lg {{ $activeFolder === 'drafts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-rose-400' }}">
+                        <div class="p-1 rounded-lg <?php echo e($activeFolder === 'drafts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-rose-400'); ?>">
                             <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
                         </div>
                         <span>Drafts</span>
                     </div>
-                    @if($counts['drafts'] > 0)
-                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'drafts' ? 'bg-white/20 text-white' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30' }} font-bold">
-                            {{ $counts['drafts'] }}
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($counts['drafts'] > 0): ?>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full <?php echo e($activeFolder === 'drafts' ? 'bg-white/20 text-white' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'); ?> font-bold">
+                            <?php echo e($counts['drafts']); ?>
+
                         </span>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </button>
 
                 <!-- Folder Spam -->
                 <button wire:click="selectFolder('spam')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group <?php echo e($activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'); ?>">
                     <div class="flex items-center gap-2.5">
-                        <div class="p-1 rounded-lg {{ $activeFolder === 'spam' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-amber-400' }}">
+                        <div class="p-1 rounded-lg <?php echo e($activeFolder === 'spam' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-amber-400'); ?>">
                             <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
                         </div>
                         <span>Spam</span>
                     </div>
-                    @if($counts['spam'] > 0)
-                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'spam' ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30' }} font-bold">
-                            {{ $counts['spam'] }}
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($counts['spam'] > 0): ?>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full <?php echo e($activeFolder === 'spam' ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'); ?> font-bold">
+                            <?php echo e($counts['spam']); ?>
+
                         </span>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </button>
 
                 <!-- Trash -->
                 <button wire:click="selectFolder('trash')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group <?php echo e($activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'); ?>">
                     <div class="flex items-center gap-2.5">
-                        <div class="p-1 rounded-lg {{ $activeFolder === 'trash' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-slate-400' }}">
+                        <div class="p-1 rounded-lg <?php echo e($activeFolder === 'trash' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-slate-400'); ?>">
                             <i data-lucide="trash" class="w-3.5 h-3.5"></i>
                         </div>
                         <span>Sampah</span>
@@ -984,56 +988,56 @@ new class extends Component
                     </div>
 
                     <div class="space-y-1">
-                        @foreach($customFolders as $folder)
-                        <div class="group relative flex items-center justify-between rounded-xl transition-all {{ $activeFolder === $folder ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-white' }}">
-                            <button wire:click="selectFolder('{{ $folder }}')" @click="showFolderSidebar = false"
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $customFolders; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $folder): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <div class="group relative flex items-center justify-between rounded-xl transition-all <?php echo e($activeFolder === $folder ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-white'); ?>">
+                            <button wire:click="selectFolder('<?php echo e($folder); ?>')" @click="showFolderSidebar = false"
                                     class="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium truncate text-left">
-                                <i data-lucide="folder" class="w-3.5 h-3.5 {{ $activeFolder === $folder ? 'text-white' : 'text-cyan-400' }} shrink-0"></i>
-                                <span class="truncate">{{ $folder }}</span>
+                                <i data-lucide="folder" class="w-3.5 h-3.5 <?php echo e($activeFolder === $folder ? 'text-white' : 'text-cyan-400'); ?> shrink-0"></i>
+                                <span class="truncate"><?php echo e($folder); ?></span>
                             </button>
                             
                             <!-- Tombol Hapus Folder -->
                             <button type="button" 
-                                    wire:click="deleteFolder('{{ $folder }}')" 
-                                    wire:confirm="Yakin ingin menghapus folder '{{ $folder }}'? Email di dalamnya akan dipindahkan ke Kotak Masuk."
+                                    wire:click="deleteFolder('<?php echo e($folder); ?>')" 
+                                    wire:confirm="Yakin ingin menghapus folder '<?php echo e($folder); ?>'? Email di dalamnya akan dipindahkan ke Kotak Masuk."
                                     class="opacity-0 group-hover:opacity-100 p-1 mr-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0" 
-                                    title="Hapus folder {{ $folder }}">
+                                    title="Hapus folder <?php echo e($folder); ?>">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
                         </div>
-                        @endforeach
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                     </div>
                 </div>
             </div>
 
             <!-- Kuota Info Dinamis dari Database virtual_users & Dovecot (Fixed Bottom Widget) -->
-            @php
+            <?php
                 $usedFormatted = $currentAccount ? $currentAccount->formatted_used : '1.16 GB';
                 $quotaFormatted = $currentAccount ? $currentAccount->formatted_quota : '5 GB';
                 $usagePercent = $currentAccount ? $currentAccount->quota_usage_percent : 23;
                 $barColor = $usagePercent >= 90 ? 'from-rose-500 to-red-600' : ($usagePercent >= 75 ? 'from-amber-400 to-orange-500' : 'from-cyan-400 to-indigo-500');
-            @endphp
+            ?>
             <div class="mt-2 pt-2 border-t border-slate-800/80 shrink-0">
-                <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-1.5 shadow-inner" title="Kapasitas penyimpanan akun {{ $currentAccount->email ?? '' }}">
+                <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-1.5 shadow-inner" title="Kapasitas penyimpanan akun <?php echo e($currentAccount->email ?? ''); ?>">
                     <div class="flex items-center justify-between font-medium">
                         <span class="flex items-center gap-1.5">
                             <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-cyan-400"></i>
                             <span class="text-slate-300 font-semibold text-[11px]">Penyimpanan</span>
                         </span>
-                        <span class="text-slate-400 font-mono text-[10px]">{{ $usedFormatted }} / {{ $quotaFormatted }}</span>
+                        <span class="text-slate-400 font-mono text-[10px]"><?php echo e($usedFormatted); ?> / <?php echo e($quotaFormatted); ?></span>
                     </div>
                     <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                        <div class="h-full bg-gradient-to-r {{ $barColor }} rounded-full transition-all duration-500" style="width: {{ $usagePercent }}%"></div>
+                        <div class="h-full bg-gradient-to-r <?php echo e($barColor); ?> rounded-full transition-all duration-500" style="width: <?php echo e($usagePercent); ?>%"></div>
                     </div>
                     <div class="flex justify-between text-[9px] text-slate-500 pt-0.5">
-                        <span>Terpakai {{ $usagePercent }}%</span>
-                        @if($usagePercent >= 90)
+                        <span>Terpakai <?php echo e($usagePercent); ?>%</span>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($usagePercent >= 90): ?>
                             <span class="text-rose-400 font-bold flex items-center gap-0.5">
                                 <i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i> Hampir Penuh
                             </span>
-                        @else
-                            <span class="text-emerald-400 font-medium">Tersedia {{ 100 - $usagePercent }}%</span>
-                        @endif
+                        <?php else: ?>
+                            <span class="text-emerald-400 font-medium">Tersedia <?php echo e(100 - $usagePercent); ?>%</span>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -1042,21 +1046,21 @@ new class extends Component
         <!-- Kolom Konten Utama: Mode Daftar (Gmail/Hostinger List) vs Mode Detail Pesan -->
         <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
 
-            @if($viewMode === 'list')
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($viewMode === 'list'): ?>
             <!-- ========================================== -->
             <!-- 1. MODE DAFTAR EMAIL (GMAIL / HOSTINGER)    -->
             <!-- ========================================== -->
-            <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden" wire:key="email-list-view">
+            <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'email-list-view'; ?>wire:key="email-list-view">
                 
                 <!-- Sub-Header: Judul Folder, Filter Chips (All mail, Unread, Read, Starred) & Search -->
                 <div class="p-3.5 sm:px-6 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
                     <div class="flex items-center gap-3">
                         <div class="flex items-center gap-2">
                             <h1 class="text-base sm:text-lg font-bold text-white capitalize flex items-center gap-2">
-                                <span>{{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}</span>
-                                @if(count($filteredEmails) > 0)
-                                    <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
-                                @endif
+                                <span><?php echo e($activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder))))); ?></span>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(count($filteredEmails) > 0): ?>
+                                    <span class="text-xs font-mono font-normal text-slate-400">(<?php echo e(count($filteredEmails)); ?>)</span>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </h1>
                             <button type="button" 
                                     wire:click="refreshInbox" 
@@ -1069,20 +1073,20 @@ new class extends Component
                         <!-- Filter Chips: All mail, Unread, Read, Starred (Gaya Hostinger/Gmail) -->
                         <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
                             <button wire:click="setFilter('all')"
-                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all {{ $activeFilter === 'all' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all <?php echo e($activeFilter === 'all' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'); ?>">
                                 Semua
                             </button>
                             <button wire:click="setFilter('unread')"
-                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all {{ $activeFilter === 'unread' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all <?php echo e($activeFilter === 'unread' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'); ?>">
                                 Belum Dibaca
                             </button>
                             <button wire:click="setFilter('read')"
-                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all {{ $activeFilter === 'read' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all <?php echo e($activeFilter === 'read' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'); ?>">
                                 Sudah Dibaca
                             </button>
                             <button wire:click="setFilter('starred')"
-                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 {{ $activeFilter === 'starred' ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                                <i data-lucide="star" class="w-3 h-3 {{ $activeFilter === 'starred' ? 'fill-slate-950' : 'text-amber-400' }}"></i>
+                                    class="px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1 <?php echo e($activeFilter === 'starred' ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20' : 'bg-slate-800/70 text-slate-300 hover:bg-slate-800 hover:text-white'); ?>">
+                                <i data-lucide="star" class="w-3 h-3 <?php echo e($activeFilter === 'starred' ? 'fill-slate-950' : 'text-amber-400'); ?>"></i>
                                 Berbintang
                             </button>
                         </div>
@@ -1096,15 +1100,15 @@ new class extends Component
                                    class="w-full pl-9 pr-3.5 py-1.5 bg-slate-950/80 border border-slate-700/80 rounded-full text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all shadow-inner">
                         </div>
 
-                        @if($activeFolder === 'trash' && count($filteredEmails) > 0)
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($activeFolder === 'trash' && count($filteredEmails) > 0): ?>
                             <button wire:click="emptyTrash" wire:confirm="Kosongkan seluruh folder Sampah?" class="text-xs text-rose-400 hover:underline flex items-center gap-1 font-semibold shrink-0">
                                 <i data-lucide="trash" class="w-3.5 h-3.5"></i> Kosongkan Sampah
                             </button>
-                        @elseif($activeFolder === 'spam' && count($filteredEmails) > 0)
+                        <?php elseif($activeFolder === 'spam' && count($filteredEmails) > 0): ?>
                             <button wire:click="emptySpam" wire:confirm="Hapus semua spam?" class="text-xs text-rose-400 hover:underline flex items-center gap-1 font-semibold shrink-0">
                                 <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Spam
                             </button>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
 
@@ -1114,13 +1118,13 @@ new class extends Component
                         <div class="flex items-center gap-2 cursor-pointer" wire:click="toggleSelectAll">
                             <input type="checkbox" 
                                    class="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0 bg-slate-900 cursor-pointer"
-                                   {{ count($selectedIds) > 0 && count($selectedIds) >= count($filteredEmails) ? 'checked' : '' }}>
+                                   <?php echo e(count($selectedIds) > 0 && count($selectedIds) >= count($filteredEmails) ? 'checked' : ''); ?>>
                             <span class="text-[11px] font-medium text-slate-300">Pilih Semua</span>
                         </div>
 
-                        @if(count($selectedIds) > 0)
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(count($selectedIds) > 0): ?>
                         <div class="flex items-center gap-2 animate-fade-in pl-2 border-l border-slate-800">
-                            <span class="text-[11px] font-semibold text-cyan-300 font-mono">{{ count($selectedIds) }} dipilih</span>
+                            <span class="text-[11px] font-semibold text-cyan-300 font-mono"><?php echo e(count($selectedIds)); ?> dipilih</span>
                             <button wire:click="deleteSelectedMultiple" class="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                             </button>
@@ -1128,67 +1132,71 @@ new class extends Component
                                 <i data-lucide="mail-open" class="w-3 h-3"></i> Tandai Dibaca
                             </button>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
                     <div class="text-[11px] font-mono text-slate-500">
-                        1 - {{ count($filteredEmails) }} dari {{ count($filteredEmails) }}
+                        1 - <?php echo e(count($filteredEmails)); ?> dari <?php echo e(count($filteredEmails)); ?>
+
                     </div>
                 </div>
 
                 <!-- Full-Width Email Rows Stream (Gmail / Hostinger Style) -->
                 <div class="flex-1 overflow-y-auto divide-y divide-slate-800/40">
-                    @forelse($filteredEmails as $email)
-                    <div wire:key="email-row-{{ $email['id'] }}"
-                         wire:click="selectEmail({{ $email['id'] }})"
-                         class="group px-4 sm:px-6 py-3 cursor-pointer transition-colors flex items-center gap-3.5 hover:bg-slate-900/60 {{ $email['is_read'] ? 'bg-slate-950/20 text-slate-300' : 'bg-slate-900/30 text-white font-semibold' }}">
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $filteredEmails; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $email): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                    <div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'email-row-'.e($email['id']).''; ?>wire:key="email-row-<?php echo e($email['id']); ?>"
+                         wire:click="selectEmail(<?php echo e($email['id']); ?>)"
+                         class="group px-4 sm:px-6 py-3 cursor-pointer transition-colors flex items-center gap-3.5 hover:bg-slate-900/60 <?php echo e($email['is_read'] ? 'bg-slate-950/20 text-slate-300' : 'bg-slate-900/30 text-white font-semibold'); ?>">
                         
                         <!-- Checkbox & Star (prevent parent click with @click.stop) -->
                         <div class="flex items-center gap-2.5 shrink-0" @click.stop>
-                            <input type="checkbox" wire:model.live="selectedIds" value="{{ $email['id'] }}"
+                            <input type="checkbox" wire:model.live="selectedIds" value="<?php echo e($email['id']); ?>"
                                    class="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0 bg-slate-900 cursor-pointer">
-                            <button wire:click="toggleStar({{ $email['id'] }})" class="p-1 text-slate-500 hover:text-amber-400 transition-colors">
-                                <i data-lucide="star" class="w-4 h-4 {{ $email['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                            <button wire:click="toggleStar(<?php echo e($email['id']); ?>)" class="p-1 text-slate-500 hover:text-amber-400 transition-colors">
+                                <i data-lucide="star" class="w-4 h-4 <?php echo e($email['is_starred'] ? 'fill-amber-400 text-amber-400' : ''); ?>"></i>
                             </button>
                         </div>
 
                         <!-- Sender Name -->
                         <div class="w-44 sm:w-56 shrink-0 truncate text-xs sm:text-sm flex items-center gap-2">
-                            @if(!$email['is_read'])
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$email['is_read']): ?>
                                 <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 ring-4 ring-cyan-400/20" title="Belum Dibaca"></span>
-                            @else
+                            <?php else: ?>
                                 <span class="w-2 h-2 rounded-full bg-transparent shrink-0"></span>
-                            @endif
-                            <span class="truncate {{ $email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white' }}">
-                                {{ $email['from_name'] }}
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <span class="truncate <?php echo e($email['is_read'] ? 'font-medium text-slate-300' : 'font-bold text-white'); ?>">
+                                <?php echo e($email['from_name']); ?>
+
                             </span>
                         </div>
 
                         <!-- Subject & Body Preview (Full Width Inline) -->
                         <div class="flex-1 min-w-0 flex items-center gap-2 text-xs sm:text-sm truncate pr-2">
-                            @if($email['folder'] === 'drafts')
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($email['folder'] === 'drafts'): ?>
                                 <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">Draf</span>
-                            @endif
-                            <span class="truncate {{ $email['is_read'] ? 'text-slate-200 font-normal' : 'text-white font-semibold' }}">
-                                {{ $email['subject'] }}
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <span class="truncate <?php echo e($email['is_read'] ? 'text-slate-200 font-normal' : 'text-white font-semibold'); ?>">
+                                <?php echo e($email['subject']); ?>
+
                             </span>
-                            @if(!empty($email['snippet']))
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!empty($email['snippet'])): ?>
                                 <span class="text-slate-500 font-normal truncate hidden md:inline">
-                                    - {{ $email['snippet'] }}
+                                    - <?php echo e($email['snippet']); ?>
+
                                 </span>
-                            @endif
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
 
                         <!-- Attachments Icon & Date / Hover Action Buttons -->
                         <div class="flex items-center gap-3 shrink-0 text-right">
-                            @if(!empty($email['attachments']))
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!empty($email['attachments'])): ?>
                                 <i data-lucide="paperclip" class="w-3.5 h-3.5 text-slate-400" title="Memiliki Lampiran"></i>
-                            @endif
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                             <!-- Quick Action Buttons on Hover -->
                             <div class="hidden group-hover:flex items-center gap-1" @click.stop>
-                                <button wire:click="toggleReadStatus({{ $email['id'] }})" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white" title="{{ $email['is_read'] ? 'Tandai Belum Dibaca' : 'Tandai Sudah Dibaca' }}">
-                                    <i data-lucide="{{ $email['is_read'] ? 'mail' : 'mail-open' }}" class="w-3.5 h-3.5"></i>
+                                <button wire:click="toggleReadStatus(<?php echo e($email['id']); ?>)" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white" title="<?php echo e($email['is_read'] ? 'Tandai Belum Dibaca' : 'Tandai Sudah Dibaca'); ?>">
+                                    <i data-lucide="<?php echo e($email['is_read'] ? 'mail' : 'mail-open'); ?>" class="w-3.5 h-3.5"></i>
                                 </button>
                                 <button wire:click="moveToFolder('trash')" class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400" title="Hapus">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -1196,11 +1204,12 @@ new class extends Component
                             </div>
 
                             <span class="group-hover:hidden text-[11px] text-slate-400 font-medium whitespace-nowrap">
-                                {{ $email['date'] }}
+                                <?php echo e($email['date']); ?>
+
                             </span>
                         </div>
                     </div>
-                    @empty
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                     <div class="p-16 text-center space-y-3">
                         <div class="w-14 h-14 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
                             <i data-lucide="mail" class="w-7 h-7 stroke-1"></i>
@@ -1208,17 +1217,17 @@ new class extends Component
                         <p class="text-sm font-semibold text-slate-300">Tidak ada pesan di folder ini</p>
                         <p class="text-xs text-slate-500">Folder ini kosong atau tidak ada email yang cocok dengan kriteria pencarian.</p>
                     </div>
-                    @endforelse
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
             </div>
 
-            @else
+            <?php else: ?>
             <!-- ========================================== -->
             <!-- 2. MODE DETAIL PESAN (GMAIL / HOSTINGER)    -->
             <!-- ========================================== -->
             <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden" 
-                 wire:key="email-detail-view-{{ $selectedEmailId }}">
-                @if($selectedEmail)
+                 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'email-detail-view-'.e($selectedEmailId).''; ?>wire:key="email-detail-view-<?php echo e($selectedEmailId); ?>">
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedEmail): ?>
                 <!-- Hostinger Action Bar (← Back, Mail, Spam, Trash, Move, Summarize AI) -->
                 <div class="px-6 py-3 border-b border-slate-800/80 bg-slate-900/60 flex items-center justify-between gap-3 shrink-0">
                     <div class="flex items-center gap-2 sm:gap-3">
@@ -1233,7 +1242,7 @@ new class extends Component
 
                         <!-- Icon Action Group: Unread, Spam, Trash, Move -->
                         <div class="flex items-center gap-1 text-slate-400">
-                            <button wire:click="toggleReadStatus({{ $selectedEmail['id'] }})" 
+                            <button wire:click="toggleReadStatus(<?php echo e($selectedEmail['id']); ?>)" 
                                     class="p-2 rounded-xl hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
                                     title="Tandai Belum Dibaca">
                                 <i data-lucide="mail" class="w-4 h-4"></i>
@@ -1245,20 +1254,20 @@ new class extends Component
                                 <i data-lucide="alert-circle" class="w-4 h-4"></i>
                             </button>
 
-                            @if($activeFolder !== 'trash')
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($activeFolder !== 'trash'): ?>
                             <button wire:click="deleteSelectedEmail" 
                                     class="p-2 rounded-xl hover:text-rose-400 hover:bg-slate-800 transition-colors" 
                                     title="Hapus Pesan">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
-                            @else
+                            <?php else: ?>
                             <button wire:click="restoreFromTrash" 
                                     class="px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5" 
                                     title="Kembalikan ke Kotak Masuk">
                                 <i data-lucide="archive-restore" class="w-4 h-4"></i>
                                 <span>Kembalikan</span>
                             </button>
-                            @endif
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                             <button wire:click="moveToFolder('inbox')" 
                                     class="p-2 rounded-xl hover:text-indigo-400 hover:bg-slate-800 transition-colors" 
@@ -1280,10 +1289,10 @@ new class extends Component
 
                     <!-- Right Quick Actions: Bintang, Reply, Forward -->
                     <div class="flex items-center gap-1 text-slate-400">
-                        <button wire:click="toggleStar({{ $selectedEmail['id'] }})" 
+                        <button wire:click="toggleStar(<?php echo e($selectedEmail['id']); ?>)" 
                                 class="p-2 rounded-xl hover:text-amber-400 hover:bg-slate-800 transition-colors" 
                                 title="Bintang">
-                            <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                            <i data-lucide="star" class="w-4 h-4 <?php echo e($selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : ''); ?>"></i>
                         </button>
                         <button wire:click="replyEmail" 
                                 class="p-2 rounded-xl hover:text-white hover:bg-slate-800 transition-colors" 
@@ -1304,7 +1313,8 @@ new class extends Component
                     <!-- Subject Title (Hostinger bold black/white title) -->
                     <div>
                         <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug">
-                            {{ $selectedEmail['subject'] }}
+                            <?php echo e($selectedEmail['subject']); ?>
+
                         </h1>
                     </div>
 
@@ -1314,8 +1324,8 @@ new class extends Component
                             <!-- From line -->
                             <div class="text-sm">
                                 <span class="font-bold text-white">From</span>
-                                <span class="font-bold text-slate-200 ml-1">{{ $selectedEmail['from_name'] }}</span>
-                                <span class="text-xs text-slate-400 font-mono ml-1">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                <span class="font-bold text-slate-200 ml-1"><?php echo e($selectedEmail['from_name']); ?></span>
+                                <span class="text-xs text-slate-400 font-mono ml-1">&lt;<?php echo e($selectedEmail['from_email']); ?>&gt;</span>
                             </div>
                             
                             <!-- To Me Dropdown -->
@@ -1328,21 +1338,21 @@ new class extends Component
 
                             <!-- Dropdown details -->
                             <div x-show="showHeaderDetails" x-collapse class="mt-2 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 space-y-1" style="display: none;">
-                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] }} &lt;{{ $selectedEmail['from_email'] }}&gt;</span></div>
-                                <div><span class="text-slate-500">To:</span> <span class="text-slate-200">{{ $selectedEmail['to'] }}</span></div>
-                                <div><span class="text-slate-500">Date:</span> <span class="text-slate-200">{{ $selectedEmail['date'] }}</span></div>
+                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200"><?php echo e($selectedEmail['from_name']); ?> &lt;<?php echo e($selectedEmail['from_email']); ?>&gt;</span></div>
+                                <div><span class="text-slate-500">To:</span> <span class="text-slate-200"><?php echo e($selectedEmail['to']); ?></span></div>
+                                <div><span class="text-slate-500">Date:</span> <span class="text-slate-200"><?php echo e($selectedEmail['date']); ?></span></div>
                                 <div><span class="text-slate-500">Security:</span> <span class="text-emerald-400">Standard TLS Encryption (Postfix/Dovecot)</span></div>
                             </div>
                         </div>
 
                         <!-- Right metadata & action icons (Date, Paperclip, Star, Reply, More) -->
                         <div class="flex items-center gap-3 text-slate-400 text-xs shrink-0">
-                            <span>{{ $selectedEmail['date'] }}</span>
-                            @if(!empty($selectedEmail['attachments']))
+                            <span><?php echo e($selectedEmail['date']); ?></span>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!empty($selectedEmail['attachments'])): ?>
                                 <i data-lucide="paperclip" class="w-4 h-4 text-slate-400"></i>
-                            @endif
-                            <button wire:click="toggleStar({{ $selectedEmail['id'] }})" class="hover:text-amber-400 transition-colors">
-                                <i data-lucide="star" class="w-4 h-4 {{ $selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : '' }}"></i>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <button wire:click="toggleStar(<?php echo e($selectedEmail['id']); ?>)" class="hover:text-amber-400 transition-colors">
+                                <i data-lucide="star" class="w-4 h-4 <?php echo e($selectedEmail['is_starred'] ? 'fill-amber-400 text-amber-400' : ''); ?>"></i>
                             </button>
                             <button wire:click="replyEmail" class="hover:text-white transition-colors" title="Balas">
                                 <i data-lucide="reply" class="w-4 h-4"></i>
@@ -1354,53 +1364,56 @@ new class extends Component
                     </div>
 
                     <!-- Hostinger Attachments Pills / Badges (Merah PDF Icon, Filename, Size, Unduh Icon) -->
-                    @if(!empty($selectedEmail['attachments']))
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!empty($selectedEmail['attachments'])): ?>
                     <div class="space-y-2 pt-2 pb-4 border-b border-slate-800/80">
                         <div class="flex flex-wrap items-center gap-3">
-                            @foreach($selectedEmail['attachments'] as $att)
-                            @php
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $selectedEmail['attachments']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $att): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                            <?php
                                 $isObject = is_array($att);
                                 $name = $isObject ? ($att['name'] ?? 'Dokumen.pdf') : $att;
                                 $size = $isObject ? ($att['size'] ?? '1 MB') : '1.2 MB';
                                 $ext = $isObject ? ($att['ext'] ?? 'pdf') : pathinfo($name, PATHINFO_EXTENSION);
                                 $path = $isObject ? ($att['path'] ?? null) : null;
                                 $fileUrl = $path ? asset('storage/' . $path) : null;
-                            @endphp
+                            ?>
                             <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900 border border-slate-700/80 hover:border-slate-600 shadow-sm transition-all group">
                                 <!-- Badge Icon Sesuai Ekstensi File -->
-                                <div class="w-8 h-8 rounded-xl {{ in_array(strtolower($ext), ['pdf']) ? 'bg-rose-600 text-white shadow-rose-600/30' : (in_array(strtolower($ext), ['doc','docx']) ? 'bg-blue-600 text-white shadow-blue-600/30' : (in_array(strtolower($ext), ['xls','xlsx']) ? 'bg-emerald-600 text-white shadow-emerald-600/30' : 'bg-slate-700 text-slate-200')) }} flex items-center justify-center font-bold text-[10px] tracking-tighter shrink-0 shadow-sm uppercase">
-                                    {{ substr($ext, 0, 4) }}
+                                <div class="w-8 h-8 rounded-xl <?php echo e(in_array(strtolower($ext), ['pdf']) ? 'bg-rose-600 text-white shadow-rose-600/30' : (in_array(strtolower($ext), ['doc','docx']) ? 'bg-blue-600 text-white shadow-blue-600/30' : (in_array(strtolower($ext), ['xls','xlsx']) ? 'bg-emerald-600 text-white shadow-emerald-600/30' : 'bg-slate-700 text-slate-200'))); ?> flex items-center justify-center font-bold text-[10px] tracking-tighter shrink-0 shadow-sm uppercase">
+                                    <?php echo e(substr($ext, 0, 4)); ?>
+
                                 </div>
                                 <div class="min-w-0 flex items-center gap-2">
-                                    <span class="text-xs font-semibold text-slate-200 truncate max-w-[180px] sm:max-w-[240px]" title="{{ $name }}">
-                                        {{ $name }}
+                                    <span class="text-xs font-semibold text-slate-200 truncate max-w-[180px] sm:max-w-[240px]" title="<?php echo e($name); ?>">
+                                        <?php echo e($name); ?>
+
                                     </span>
                                     <span class="text-xs text-slate-400 shrink-0 font-medium">
-                                        {{ $size }}
+                                        <?php echo e($size); ?>
+
                                     </span>
                                 </div>
                                 <!-- Download Button -->
-                                @if($fileUrl)
-                                    <a href="{{ $fileUrl }}" download="{{ $name }}" target="_blank"
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($fileUrl): ?>
+                                    <a href="<?php echo e($fileUrl); ?>" download="<?php echo e($name); ?>" target="_blank"
                                        class="p-1.5 rounded-lg text-slate-400 group-hover:text-cyan-300 hover:bg-slate-800 transition-colors ml-1" 
-                                       title="Unduh {{ $name }}">
+                                       title="Unduh <?php echo e($name); ?>">
                                         <i data-lucide="download" class="w-4 h-4"></i>
                                     </a>
-                                @else
+                                <?php else: ?>
                                     <button type="button" 
-                                            onclick="alert('Mengunduh dokumen lampiran: {{ $name }}')"
+                                            onclick="alert('Mengunduh dokumen lampiran: <?php echo e($name); ?>')"
                                             class="p-1.5 rounded-lg text-slate-400 group-hover:text-white hover:bg-slate-800 transition-colors ml-1" 
-                                            title="Unduh {{ $name }}">
+                                            title="Unduh <?php echo e($name); ?>">
                                         <i data-lucide="download" class="w-4 h-4"></i>
                                     </button>
-                                @endif
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </div>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </div>
 
                         <!-- Attachment Count & Download All Link -->
                         <div class="flex items-center gap-3 text-xs text-slate-400 pt-1">
-                            <span>{{ count($selectedEmail['attachments']) }} attachments</span>
+                            <span><?php echo e(count($selectedEmail['attachments'])); ?> attachments</span>
                             <span>•</span>
                             <button type="button" 
                                     onclick="alert('Mengunduh semua dokumen lampiran zip...')"
@@ -1409,36 +1422,39 @@ new class extends Component
                             </button>
                         </div>
                     </div>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <!-- Warning Banner Saat Berada di Folder SPAM -->
-                    @if($activeFolder === 'spam')
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($activeFolder === 'spam'): ?>
                     <div class="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-xs text-rose-300 space-y-1.5">
                         <div class="flex items-start gap-2.5">
                             <i data-lucide="alert-octagon" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
                             <div>
                                 <p class="font-bold text-white text-xs">Peringatan Keamanan Spam</p>
                                 <p class="text-rose-200/90 leading-relaxed text-[11px] mt-0.5">
-                                    {{ $selectedEmail['spam_reason'] ?? 'Pesan ini dilaporkan sebagai spam oleh filter keamanan kami.' }}
+                                    <?php echo e($selectedEmail['spam_reason'] ?? 'Pesan ini dilaporkan sebagai spam oleh filter keamanan kami.'); ?>
+
                                 </p>
                             </div>
                         </div>
                     </div>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <!-- Email Body Content (HTML & Plain Text Support) -->
                     <div class="py-2 text-slate-200">
-                        @if (preg_match('/<[a-z][\s\S]*>/i', $selectedEmail['body']))
-                            {{-- Email Berformat Rich HTML (Tampilan Kertas Dokumen Modern Bersih) --}}
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(preg_match('/<[a-z][\s\S]*>/i', $selectedEmail['body'])): ?>
+                            
                             <div class="rounded-2xl p-6 sm:p-8 bg-slate-900/90 border border-slate-800 text-slate-200 leading-relaxed font-sans shadow-lg overflow-x-auto selection:bg-indigo-500 selection:text-white email-rendered-content">
-                                {!! $this->cleanEmailHtml($selectedEmail['body']) !!}
+                                <?php echo $this->cleanEmailHtml($selectedEmail['body']); ?>
+
                             </div>
-                        @else
-                            {{-- Email Berformat Plain Text --}}
+                        <?php else: ?>
+                            
                             <div class="rounded-2xl p-6 sm:p-8 bg-slate-900/60 border border-slate-800 text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line shadow-sm">
-                                {{ $selectedEmail['body'] }}
+                                <?php echo e($selectedEmail['body']); ?>
+
                             </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
                     <!-- Space filler so content never overlaps with sticky footer -->
@@ -1447,7 +1463,7 @@ new class extends Component
 
                 <!-- Hostinger Flat Sticky Bottom Footer (Reply & Forward Bar / Inline Compose Box) -->
                 <div class="border-t border-slate-800/90 bg-slate-950/95 backdrop-blur-xl px-6 sm:px-8 py-4 sm:py-5 shrink-0 z-20 shadow-2xl">
-                    @if(!$showInlineReply)
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$showInlineReply): ?>
                     <!-- Flat Reply / Forward Rounded Buttons (Tidak berpindah & flat di footer) -->
                     <div class="flex items-center gap-3">
                         <button type="button" 
@@ -1464,11 +1480,11 @@ new class extends Component
                             <span>Forward</span>
                         </button>
                     </div>
-                    @else
+                    <?php else: ?>
                     <!-- Hostinger Inline Reply Box (Sesuai Gambar Screenshot) -->
                     <div class="rounded-2xl sm:rounded-3xl border border-slate-700/80 bg-slate-900/95 shadow-2xl p-4 sm:p-5 flex flex-col space-y-3 max-h-[46vh] overflow-y-auto custom-scrollbar">
                         <!-- Top Header: Forward vs Reply layout -->
-                        @if($inlineReplyMode === 'forward')
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($inlineReplyMode === 'forward'): ?>
                         <!-- Hostinger Forward Header (Arrow, To input, Cc/Bcc/Subject toggle) -->
                         <div class="space-y-2 pb-1 border-b border-slate-800/60">
                             <div class="flex items-center justify-between gap-3">
@@ -1485,7 +1501,8 @@ new class extends Component
                                     <button type="button" 
                                             wire:click="$toggle('showInlineCcBcc')" 
                                             class="text-[11px] text-slate-400 hover:text-cyan-300 font-medium transition-colors">
-                                        {{ $showInlineCcBcc ? 'Sembunyikan' : 'Cc / Bcc / Subject' }}
+                                        <?php echo e($showInlineCcBcc ? 'Sembunyikan' : 'Cc / Bcc / Subject'); ?>
+
                                     </button>
                                     <button type="button" 
                                             wire:click="closeInlineReply" 
@@ -1495,10 +1512,17 @@ new class extends Component
                                     </button>
                                 </div>
                             </div>
-                            @error('quickReplyTo') <span class="text-xs text-rose-400 block font-medium">{{ $message }}</span> @enderror
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['quickReplyTo'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <span class="text-xs text-rose-400 block font-medium"><?php echo e($message); ?></span> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                             <!-- Optional Expandable CC/BCC & Subject for Forward -->
-                            @if($showInlineCcBcc)
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showInlineCcBcc): ?>
                             <div class="pt-2 space-y-2 border-t border-slate-800/40">
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <input type="email" wire:model="quickReplyCc" placeholder="Cc: alamat@domain.com" 
@@ -1509,15 +1533,15 @@ new class extends Component
                                 <input type="text" wire:model="quickReplySubject" placeholder="Subject..." 
                                        class="w-full px-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
                             </div>
-                            @endif
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
-                        @else
+                        <?php else: ?>
                         <!-- Hostinger Reply Header (Reply arrow, Recipient info, Close icon) -->
                         <div class="flex items-center justify-between pb-1 border-b border-slate-800/60">
                             <div class="flex items-center gap-2 text-xs">
                                 <i data-lucide="reply" class="w-4 h-4 text-slate-400"></i>
-                                <span class="font-bold text-white">{{ $selectedEmail['from_name'] }}</span>
-                                <span class="text-[11px] text-slate-400 font-mono hidden sm:inline">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                <span class="font-bold text-white"><?php echo e($selectedEmail['from_name']); ?></span>
+                                <span class="text-[11px] text-slate-400 font-mono hidden sm:inline">&lt;<?php echo e($selectedEmail['from_email']); ?>&gt;</span>
                             </div>
                             <div class="flex items-center gap-1.5">
                                 <button type="button" 
@@ -1528,19 +1552,26 @@ new class extends Component
                                 </button>
                             </div>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                         <!-- Textarea Area -->
                         <div class="relative">
                             <textarea wire:model="quickReplyText" 
-                                      rows="{{ $inlineReplyMode === 'forward' ? '4' : '2' }}" 
-                                      placeholder="{{ $inlineReplyMode === 'forward' ? 'Tambahkan pesan pengantar di sini...' : 'Tulis balasan email Anda di sini...' }}" 
+                                      rows="<?php echo e($inlineReplyMode === 'forward' ? '4' : '2'); ?>" 
+                                      placeholder="<?php echo e($inlineReplyMode === 'forward' ? 'Tambahkan pesan pengantar di sini...' : 'Tulis balasan email Anda di sini...'); ?>" 
                                       class="w-full bg-transparent border-0 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-0 resize-y font-sans leading-relaxed"></textarea>
-                            @error('quickReplyText') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['quickReplyText'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <span class="text-xs text-rose-400 mt-1 block font-medium"><?php echo e($message); ?></span> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
 
                         <!-- AI Suggestion Chips (Hanya saat mode Balas/Reply) -->
-                        @if($inlineReplyMode === 'reply')
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($inlineReplyMode === 'reply'): ?>
                         <div class="flex items-center gap-2 overflow-x-auto pb-1 text-[11px] text-slate-300 custom-scrollbar">
                             <button type="button" 
                                     wire:click="$set('quickReplyText', 'Baik, konfirmasi penerimaan dokumen sudah kami catat dan segera kami proses.')"
@@ -1561,7 +1592,7 @@ new class extends Component
                                 <span>Minta klarifikasi singkat</span>
                             </button>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                         <!-- Ask AI to draft a message Pill Input (Gaya Hostinger) -->
                         <div class="flex items-center justify-between px-3.5 py-1.5 rounded-full border border-indigo-500/40 bg-indigo-950/20 shadow-inner">
@@ -1577,16 +1608,17 @@ new class extends Component
                         </div>
 
                         <!-- Attached Files Badge if any -->
-                        @if(!empty($quickReplyAttachments))
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!empty($quickReplyAttachments)): ?>
                         <div class="flex flex-wrap gap-2 pt-1">
-                            @foreach($quickReplyAttachments as $file)
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $quickReplyAttachments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $file): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <span class="px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-mono flex items-center gap-1.5">
                                 <i data-lucide="file-check" class="w-3 h-3 text-emerald-400"></i>
-                                {{ $file->getClientOriginalName() }}
+                                <?php echo e($file->getClientOriginalName()); ?>
+
                             </span>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                         <!-- Bottom Action Bar (Send Pill Button, Formatting Icons, Save draft, Trash) -->
                         <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
@@ -1638,10 +1670,10 @@ new class extends Component
                             </div>
                         </div>
                     </div>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
             </div>
-            @else
+            <?php else: ?>
             <div class="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs space-y-3">
                 <div class="w-14 h-14 rounded-3xl bg-slate-900/60 border border-slate-800 flex items-center justify-center text-slate-500">
                     <i data-lucide="mail-open" class="w-7 h-7 stroke-1 text-slate-400"></i>
@@ -1651,13 +1683,13 @@ new class extends Component
                     <p class="text-slate-500 text-xs mt-1">Pilih salah satu pesan di daftar sebelah kiri untuk membaca</p>
                 </div>
             </div>
-            @endif
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
-        @endif
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
 
     <!-- Modal Tulis Pesan (Compose) Lengkap dengan CC/BCC -->
-    @if($showComposeModal)
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showComposeModal): ?>
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 md:p-6 overflow-hidden">
         <div class="w-full max-w-2xl max-h-[92vh] sm:max-h-[88vh] bg-slate-900/98 border border-slate-700/90 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-2xl">
             <!-- Modal Header -->
@@ -1668,10 +1700,11 @@ new class extends Component
                     </div>
                     <div>
                         <h4 class="text-sm font-bold text-white flex items-center gap-2">
-                            {{ $editingDraftId ? 'Edit Draf Pesan' : 'Tulis Pesan Baru' }}
-                            @if($editingDraftId)
+                            <?php echo e($editingDraftId ? 'Edit Draf Pesan' : 'Tulis Pesan Baru'); ?>
+
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($editingDraftId): ?>
                                 <span class="text-[9px] font-mono px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">DRAFT</span>
-                            @endif
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </h4>
                         <span class="text-[10px] text-slate-500">Tersimpan otomatis ke folder Drafts</span>
                     </div>
@@ -1688,15 +1721,23 @@ new class extends Component
                         <div class="flex items-center justify-between mb-1.5">
                             <label class="block text-xs font-bold text-slate-300">Kepada (To)</label>
                             <button type="button" wire:click="$toggle('showCcBcc')" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold">
-                                {{ $showCcBcc ? 'Sembunyikan CC/BCC' : '+ Tambah CC / BCC' }}
+                                <?php echo e($showCcBcc ? 'Sembunyikan CC/BCC' : '+ Tambah CC / BCC'); ?>
+
                             </button>
                         </div>
                         <input type="email" wire:model="composeTo" placeholder="alamat@tujuan.com" 
                                class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
-                        @error('composeTo') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['composeTo'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <span class="text-xs text-rose-400 mt-1 block font-medium"><?php echo e($message); ?></span> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
-                    @if($showCcBcc)
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showCcBcc): ?>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold text-slate-300 mb-1">CC</label>
@@ -1709,13 +1750,20 @@ new class extends Component
                                    class="w-full px-4 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
                         </div>
                     </div>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <div>
                         <label class="block text-xs font-bold text-slate-300 mb-1.5">Subjek Pesan</label>
                         <input type="text" wire:model="composeSubject" placeholder="Subjek email..." 
                                class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
-                        @error('composeSubject') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['composeSubject'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <span class="text-xs text-rose-400 mt-1 block font-medium"><?php echo e($message); ?></span> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
                     <div>
@@ -1735,16 +1783,17 @@ new class extends Component
                             <span wire:loading wire:target="attachments" class="text-[11px] text-amber-400 animate-pulse">Mengunggah file...</span>
                         </div>
 
-                        @if(!empty($attachments))
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!empty($attachments)): ?>
                         <div class="flex flex-wrap gap-2 mt-2.5">
-                            @foreach($attachments as $file)
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $attachments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $file): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <span class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-mono flex items-center gap-2 shadow-sm">
                                 <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400"></i>
-                                {{ $file->getClientOriginalName() }}
+                                <?php echo e($file->getClientOriginalName()); ?>
+
                             </span>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </div>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
 
@@ -1777,10 +1826,10 @@ new class extends Component
             </form>
         </div>
     </div>
-    @endif
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
     <!-- Modal Buat Folder Baru -->
-    @if($showCreateFolderModal)
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showCreateFolderModal): ?>
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
         <div class="w-full max-w-sm bg-slate-900/95 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl">
             <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
@@ -1798,7 +1847,14 @@ new class extends Component
                     <label class="block font-bold text-slate-300 mb-1.5">Nama Folder</label>
                     <input type="text" wire:model="newFolderName" placeholder="contoh: Arsip Proyek, Pajak, Klien VIP" 
                            class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500">
-                    @error('newFolderName') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['newFolderName'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?> <span class="text-xs text-rose-400 mt-1 block font-medium"><?php echo e($message); ?></span> <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
 
                 <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
@@ -1812,5 +1868,5 @@ new class extends Component
             </form>
         </div>
     </div>
-    @endif
-</div>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+</div><?php /**PATH D:\AI Code\mailids\resources\views/components/webmail/⚡mail-client.blade.php ENDPATH**/ ?>

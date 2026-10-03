@@ -1,17 +1,18 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full bg-slate-950 text-slate-100">
+<html lang="<?php echo e(str_replace('_', '-', app()->getLocale())); ?>" class="h-full bg-slate-950 text-slate-100">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $title ?? 'Webmail - MailIDS' }}</title>
+    <title><?php echo e($title ?? 'Webmail - MailIDS'); ?></title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
+    <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css', 'resources/js/app.js']); ?>
+    <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
+
     <style>
         .email-rendered-content {
             color: #e2e8f0;
@@ -75,11 +76,13 @@
             <!-- Active Mailbox Pill -->
             <div class="px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center gap-2.5 shadow-inner">
                 <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-xs">
-                    {{ strtoupper(substr(auth('mailbox')->user()->email ?? 'U', 0, 1)) }}
+                    <?php echo e(strtoupper(substr(auth('mailbox')->user()->email ?? 'U', 0, 1))); ?>
+
                 </div>
                 <div class="flex flex-col text-left">
                     <span class="text-[11px] font-semibold text-slate-200 font-mono leading-none">
-                        {{ auth('mailbox')->user()->email ?? 'user@domain.com' }}
+                        <?php echo e(auth('mailbox')->user()->email ?? 'user@domain.com'); ?>
+
                     </span>
                     <span class="text-[9px] text-emerald-400 font-medium flex items-center gap-1 leading-tight mt-0.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> IMAP/SMTP Connected
@@ -89,8 +92,8 @@
 
             <div class="h-6 w-px bg-slate-800"></div>
 
-            <form method="POST" action="{{ route('webmail.logout') }}" class="inline">
-                @csrf
+            <form method="POST" action="<?php echo e(route('webmail.logout')); ?>" class="inline">
+                <?php echo csrf_field(); ?>
                 <button type="submit" class="px-3 sm:px-3.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/15 text-slate-300 hover:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80 hover:border-rose-500/30 shadow-sm" title="Keluar dari Webmail">
                     <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
                     <span class="hidden sm:inline">Keluar</span>
@@ -101,10 +104,12 @@
 
     <!-- Webmail Body Slot -->
     <main class="flex-1 p-3 sm:p-5 pb-6 sm:pb-8 mb-1 min-h-0 overflow-hidden flex flex-col">
-        {{ $slot }}
+        <?php echo e($slot); ?>
+
     </main>
 
-    @livewireScripts
+    <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::scripts(); ?>
+
     <script>
         let iconTimeout = null;
         function refreshIcons() {
@@ -127,3 +132,4 @@
     </script>
 </body>
 </html>
+<?php /**PATH D:\AI Code\mailids\resources\views/layouts/webmail.blade.php ENDPATH**/ ?>

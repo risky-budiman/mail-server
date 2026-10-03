@@ -9,6 +9,64 @@ new class extends Component
 
     public function getLogsProperty()
     {
+        // 1. Jika di server Linux asli dan file /var/log/mail.log ada serta dapat dibaca
+        if (PHP_OS_FAMILY === 'Linux' && file_exists('/var/log/mail.log') && is_readable('/var/log/mail.log')) {
+            $rawLines = @file('/var/log/mail.log', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if (!empty($rawLines)) {
+                $lastLines = array_slice($rawLines, -100); // Ambil 100 baris terakhir
+                $parsedLogs = [];
+                foreach (array_reverse($lastLines) as $line) {
+                    $service = 'system';
+                    $level = 'INFO';
+                    $badge = 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+
+                    if (preg_match('/postfix\/smtpd/i', $line)) {
+                        $service = 'postfix/smtpd';
+                        $badge = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                    } elseif (preg_match('/postfix\/smtp/i', $line)) {
+                        $service = 'postfix/smtp';
+                        $level = 'DELIVERY';
+                        $badge = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                    } elseif (preg_match('/dovecot/i', $line)) {
+                        $service = 'dovecot';
+                        $level = 'IMAP';
+                        $badge = 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
+                    } elseif (preg_match('/opendkim/i', $line)) {
+                        $service = 'opendkim';
+                        $level = 'SECURITY';
+                        $badge = 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+                    }
+
+                    if (preg_match('/(error|reject|fatal|panic|failed)/i', $line)) {
+                        $level = 'ERROR';
+                        $badge = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                    }
+
+                    // Ambil waktu dari awal baris log jika ada (contoh: "Oct  3 20:30:15")
+                    $time = substr($line, 0, 15);
+                    $parsedLogs[] = [
+                        'time' => !empty($time) ? $time : now()->format('H:i:s'),
+                        'service' => $service,
+                        'level' => $level,
+                        'message' => $line,
+                        'badge' => $badge,
+                    ];
+                }
+
+                return collect($parsedLogs)->filter(function ($item) {
+                    if ($this->filter === 'postfix' && !str_contains($item['service'], 'postfix')) return false;
+                    if ($this->filter === 'dovecot' && !str_contains($item['service'], 'dovecot')) return false;
+                    if ($this->filter === 'security' && !in_array($item['level'], ['SECURITY', 'RATE-LIMIT'])) return false;
+
+                    if ($this->search && !str_contains(strtolower($item['message']), strtolower($this->search))) {
+                        return false;
+                    }
+                    return true;
+                })->values();
+            }
+        }
+
+        // 2. Fallback untuk simulasi dev lokal (Windows / Demo)
         $allLogs = [
             [
                 'time' => now()->subSeconds(14)->format('H:i:s'),

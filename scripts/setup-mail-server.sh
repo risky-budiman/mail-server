@@ -20,7 +20,10 @@ echo ">>> Menjalankan Setup Mail Engine untuk: ${HOSTNAME}"
 echo ">>> Database: ${DB_NAME} (User: ${DB_USER})"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql opendkim opendkim-tools ufw
+apt-get install -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd dovecot-mysql opendkim opendkim-tools ufw imapsync
+
+# Pastikan www-data dapat membaca log mail sistem (/var/log/mail.log) jika Nginx terpasang
+usermod -a -G adm www-data || true
 
 echo "======================================================"
 echo " 2. Konfigurasi Hostname Server"

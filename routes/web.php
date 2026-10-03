@@ -45,6 +45,7 @@ Route::prefix('admin')->middleware('auth.admin')->group(function () {
     Route::livewire('/dns-helper', 'admin.dns-helper')->name('admin.dns-helper');
     Route::livewire('/mail-tester', 'admin.mail-tester-simulator')->name('admin.mail-tester');
     Route::livewire('/installer', 'admin.installer-wizard')->name('admin.installer');
+    Route::livewire('/migration', 'admin.migration-tool')->name('admin.migration');
     Route::livewire('/profile', 'admin.admin-profile')->name('admin.profile');
     Route::livewire('/logs', 'admin.log-viewer')->name('admin.logs');
 });

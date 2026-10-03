@@ -113,6 +113,15 @@
                     <span>1-Click Server Installer</span>
                 </a>
 
+                <a href="{{ route('admin.migration') }}" wire:navigate @click="mobileMenuOpen = false"
+                   class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.migration') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="arrow-left-right" class="w-4 h-4 shrink-0 text-amber-400"></i>
+                        <span>Migrasi Email (Hostinger)</span>
+                    </div>
+                    <span class="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">Baru</span>
+                </a>
+
                 <a href="{{ route('admin.logs') }}" wire:navigate @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.logs') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="terminal" class="w-4 h-4 shrink-0"></i>
