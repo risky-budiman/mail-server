@@ -53,37 +53,49 @@ new class extends Component
     {
         $domains = VirtualDomain::all();
         $currentDomain = VirtualDomain::find($this->selectedDomainId) ?? $domains->first();
-        $domainName = $currentDomain ? $currentDomain->name : 'domain.net.id';
+        $domainName = $currentDomain ? $currentDomain->name : 'ids.net.id';
+
+        // Deteksi Primary Host Server (dari APP_URL .env atau hostname server Ubuntu, misal mail.ids.net.id)
+        $parsedAppHost = parse_url(config('app.url', 'http://mail.ids.net.id'), PHP_URL_HOST);
+        $primaryMailHost = $parsedAppHost ?: (gethostname() ?: 'mail.ids.net.id');
+        if (!str_contains($primaryMailHost, '.')) {
+            $primaryMailHost = 'mail.ids.net.id';
+        }
+
+        // Tentukan apakah domain yang dipilih adalah domain utama server
+        $isPrimaryServerDomain = str_ends_with($primaryMailHost, $domainName);
 
         $dnsRecords = [
             [
                 'type' => 'A',
-                'subtype' => 'Host',
-                'host' => 'mail.' . $domainName,
+                'subtype' => 'Host (Webmail & Mail Engine)',
+                'host' => $isPrimaryServerDomain ? 'mail.' . $domainName : 'mail.' . $domainName . ' (Opsional jika ingin webmail ber-CNAME)',
                 'value' => $this->serverIp,
                 'priority' => '-',
                 'ttl' => '3600',
-                'description' => 'Mengarahkan host mail server ke IP publik VPS Anda.',
-                'status' => 'Wajib',
+                'description' => $isPrimaryServerDomain 
+                    ? "Mengarahkan host utama mail server & web portal ke IP VPS Anda ({$this->serverIp})." 
+                    : "Mengarahkan host mail domain ini ke IP server utama {$this->serverIp} (atau cukup gunakan MX yang mengarah ke {$primaryMailHost}).",
+                'status' => $isPrimaryServerDomain ? 'Wajib (Server Utama)' : 'Opsional',
             ],
             [
                 'type' => 'MX',
                 'subtype' => 'Mail Exchanger',
                 'host' => '@ (atau ' . $domainName . ')',
-                'value' => 'mail.' . $domainName . '.',
+                'value' => $primaryMailHost . '.',
                 'priority' => '10',
                 'ttl' => '3600',
-                'description' => 'Menentukan server tujuan untuk seluruh email yang masuk ke domain ini.',
+                'description' => "Menentukan tujuan email masuk ke server utama ({$primaryMailHost}) yang melayani multi-domain ini.",
                 'status' => 'Wajib',
             ],
             [
                 'type' => 'TXT',
                 'subtype' => 'SPF Record',
                 'host' => '@ (atau ' . $domainName . ')',
-                'value' => 'v=spf1 mx a:mail.' . $domainName . ' ip4:' . $this->serverIp . ' ~all',
+                'value' => 'v=spf1 mx a:' . $primaryMailHost . ' ip4:' . $this->serverIp . ' ~all',
                 'priority' => '-',
                 'ttl' => '3600',
-                'description' => 'Mengesahkan server dengan IP tersebut berhak mengirim email atas nama domain.',
+                'description' => "Mengesahkan server {$primaryMailHost} ({$this->serverIp}) berhak mengirim email atas nama @{$domainName}.",
                 'status' => 'Penting (Anti-Spam)',
             ],
             [
@@ -108,19 +120,21 @@ new class extends Component
             ],
             [
                 'type' => 'PTR',
-                'subtype' => 'Reverse DNS',
+                'subtype' => 'Reverse DNS (rDNS)',
                 'host' => $this->serverIp . ' (diatur di panel hosting VPS)',
-                'value' => 'mail.' . $domainName,
+                'value' => $primaryMailHost,
                 'priority' => '-',
                 'ttl' => 'Default',
-                'description' => 'Reverse DNS IP harus meresolusi balik ke hostname mail server.',
-                'status' => 'Krusial (Syarat Inbox)',
+                'description' => "Reverse DNS IP server diatur 1x saja ke hostname server utama ({$primaryMailHost}).",
+                'status' => 'Krusial (1x di Panel VPS)',
             ],
         ];
 
         return view('components.admin.⚡dns-helper', [
             'domains' => $domains,
             'domainName' => $domainName,
+            'primaryMailHost' => $primaryMailHost,
+            'isPrimaryServerDomain' => $isPrimaryServerDomain,
             'dnsRecords' => $dnsRecords,
         ])->layout('layouts.app', ['title' => 'DNS & Security Guide - Mail Portal']);
     }
@@ -133,11 +147,17 @@ new class extends Component
         <div>
             <h2 class="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
                 <i data-lucide="shield-check" class="w-6 h-6 text-indigo-400"></i>
-                Generator DNS & Keamanan Email (SPF, DKIM, DMARC)
+                Generator DNS & Keamanan Email Multi-Domain
             </h2>
             <p class="text-sm text-slate-400 mt-1">
-                Alat bantu otomatis untuk men-generate konfigurasi DNS record domain Anda agar saat nanti VPS sudah dibeli, skor email langsung 10/10 (Masuk Inbox).
+                Panduan DNS otomatis untuk semua domain bisnis Anda yang dilayani oleh 1 server host utama: <span class="font-mono text-cyan-300 font-bold">{{ $primaryMailHost }}</span>.
             </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                <i data-lucide="server" class="w-3.5 h-3.5"></i>
+                <span>Primary Host: {{ $primaryMailHost }}</span>
+            </span>
         </div>
     </div>
 

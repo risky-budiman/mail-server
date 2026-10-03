@@ -9,6 +9,10 @@ new class extends Component
     public $testing = false;
     public $score = 10;
     public $results = [];
+    public $test_recipient = '';
+    public $isSending = false;
+    public $sendSuccess = null;
+    public $sendMessage = '';
 
     public function mount()
     {
@@ -17,6 +21,46 @@ new class extends Component
             $this->domain_id = $domain->id;
         }
         $this->runDiagnostic();
+    }
+
+    public function sendTestMail()
+    {
+        $this->validate([
+            'test_recipient' => 'required|email',
+        ], [
+            'test_recipient.required' => 'Masukkan alamat email sementara dari mail-tester.com',
+            'test_recipient.email' => 'Format email mail-tester tidak valid',
+        ]);
+
+        $domain = VirtualDomain::find($this->domain_id) ?? VirtualDomain::first();
+        $domainName = $domain ? trim($domain->name) : 'ids.net.id';
+        $fromEmail = "postmaster@{$domainName}";
+        $fromName = "MailIDS System ({$domainName})";
+        $subject = "Uji Skor Deliverability Mail-Tester - " . now()->format('d M Y H:i:s');
+        $body = "Halo Mail-Tester,\n\nIni adalah pesan pengujian otomatis dari sistem Mail Server mandiri ({$domainName}).\nPesan ini dikirim untuk memverifikasi SPF, DKIM 2048-bit, DMARC policy, dan reputasi PTR rDNS IP server.\n\nDikirim pada: " . now()->toRfc2822();
+
+        $this->isSending = true;
+        try {
+            $success = \App\Services\MailService::sendOutboundMail(
+                $fromEmail,
+                $fromName,
+                $this->test_recipient,
+                $subject,
+                $body
+            );
+
+            if ($success) {
+                $this->sendSuccess = true;
+                $this->sendMessage = "Pesan pengujian berhasil dikirim ke {$this->test_recipient} menggunakan pengirim {$fromEmail}! Silakan buka web mail-tester.com dan klik tombol 'Then check your score'.";
+            } else {
+                $this->sendSuccess = false;
+                $this->sendMessage = "Gagal mengirim email melalui engine Postfix lokal. Periksa log server pada menu Log Viewer.";
+            }
+        } catch (\Throwable $e) {
+            $this->sendSuccess = false;
+            $this->sendMessage = "Error pengiriman: " . $e->getMessage();
+        }
+        $this->isSending = false;
     }
 
     public $isLive = false;
@@ -242,6 +286,68 @@ new class extends Component
                 </span>
             </button>
         </div>
+    </div>
+
+    <!-- Kotak Uji Kirim Langsung ke https://www.mail-tester.com/ -->
+    <div class="p-6 rounded-2xl bg-slate-900/80 border border-indigo-500/30 backdrop-blur-md shadow-xl space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        Kirim Email Uji Coba ke Mail-Tester.com
+                        <a href="https://www.mail-tester.com" target="_blank" rel="noopener noreferrer" 
+                           class="text-[11px] font-normal text-indigo-400 hover:text-indigo-300 flex items-center gap-1 underline">
+                            Buka Mail-Tester.com <i data-lucide="external-link" class="w-3 h-3"></i>
+                        </a>
+                    </h3>
+                    <p class="text-[11px] text-slate-400">
+                        Buka situs <span class="text-white font-mono">mail-tester.com</span>, salin alamat email uji yang diberikan, lalu kirim email dari form ini untuk mendapatkan nilai 10/10.
+                    </p>
+                </div>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Postfix SMTP Outbound Siap
+            </span>
+        </div>
+
+        @if($sendSuccess === true)
+            <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span>{{ $sendMessage }}</span>
+            </div>
+        @elseif($sendSuccess === false)
+            <div class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5">
+                <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400 shrink-0"></i>
+                <span>{{ $sendMessage }}</span>
+            </div>
+        @endif
+
+        <form wire:submit="sendTestMail" class="flex flex-col sm:flex-row items-stretch gap-3">
+            <div class="flex-1 relative">
+                <input type="email" wire:model="test_recipient" 
+                       placeholder="Tempel alamat email dari mail-tester (contoh: test-xyz123@mail-tester.com)" 
+                       class="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 hover:border-indigo-500/50 rounded-xl text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-indigo-500 shadow-inner">
+                @error('test_recipient') 
+                    <span class="text-[10px] text-rose-400 mt-1 block pl-1">{{ $message }}</span> 
+                @enderror
+            </div>
+
+            <button type="submit" wire:loading.attr="disabled"
+                    class="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50">
+                <span wire:loading.remove wire:target="sendTestMail" class="flex items-center gap-2">
+                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                    <span>Kirim Pesan Uji Sekarang</span>
+                </span>
+                <span wire:loading wire:target="sendTestMail" class="flex items-center gap-2">
+                    <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                    <span>Mengirim Outbound...</span>
+                </span>
+            </button>
+        </form>
     </div>
 
     <!-- Skor Banner Modern & Elegan -->
