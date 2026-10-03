@@ -1001,8 +1001,8 @@ new class extends Component
         $user = $this->getAccount();
         $userId = $user ? $user->id : 0;
 
-        // Ringan & Cepat: Hanya select field yang diperlukan untuk list view
-        $filteredEmails = MailboxEmail::where('virtual_user_id', $userId)
+        // Ambil semua email sesuai filter
+        $rawEmailList = MailboxEmail::where('virtual_user_id', $userId)
             ->where('folder', $this->activeFolder)
             ->when($this->searchQuery, function ($query) {
                 $q = '%' . $this->searchQuery . '%';
@@ -1023,25 +1023,54 @@ new class extends Component
                 $query->where('is_read', true);
             })
             ->orderBy('id', 'desc')
-            ->get(['id', 'folder', 'from_name', 'from_email', 'to', 'subject', 'body', 'date_human', 'is_read', 'is_starred', 'attachments', 'spam_reason', 'spam_score', 'created_at'])
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'folder' => $item->folder,
-                    'from_name' => $this->decodeMimeHeader($item->from_name),
-                    'from_email' => $item->from_email,
-                    'to' => $item->to,
-                    'subject' => $this->decodeMimeHeader($item->subject),
-                    'body' => $item->body,
-                    'snippet' => $this->getCleanSnippet($item->body, 85),
-                    'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
-                    'is_read' => (bool) $item->is_read,
-                    'is_starred' => (bool) $item->is_starred,
-                    'attachments' => $item->attachments ?: [],
-                    'spam_reason' => $item->spam_reason,
-                    'spam_score' => $item->spam_score,
+            ->get(['id', 'folder', 'from_name', 'from_email', 'to', 'subject', 'body', 'date_human', 'is_read', 'is_starred', 'attachments', 'spam_reason', 'spam_score', 'created_at']);
+
+        // Grouping Thread Percakapan (Gaya Gmail: 1 Thread = 1 Baris dengan Badge Angka Jumlah Pesan)
+        $groupedThreads = [];
+        foreach ($rawEmailList as $item) {
+            $normSubj = strtolower(trim(preg_replace('/^(Re:\s*|Fwd:\s*)+/i', '', $item->subject)));
+            if (empty($normSubj)) {
+                $normSubj = 'single_' . $item->id;
+            }
+
+            if (!isset($groupedThreads[$normSubj])) {
+                $groupedThreads[$normSubj] = [
+                    'primary' => $item,
+                    'count' => 1,
+                    'has_unread' => !(bool)$item->is_read,
+                    'has_starred' => (bool)$item->is_starred,
                 ];
-            });
+            } else {
+                $groupedThreads[$normSubj]['count']++;
+                if (!$item->is_read) {
+                    $groupedThreads[$normSubj]['has_unread'] = true;
+                }
+                if ($item->is_starred) {
+                    $groupedThreads[$normSubj]['has_starred'] = true;
+                }
+            }
+        }
+
+        $filteredEmails = collect($groupedThreads)->map(function ($thread) {
+            $item = $thread['primary'];
+            return [
+                'id' => $item->id,
+                'thread_count' => $thread['count'],
+                'folder' => $item->folder,
+                'from_name' => $this->decodeMimeHeader($item->from_name),
+                'from_email' => $item->from_email,
+                'to' => $item->to,
+                'subject' => $this->decodeMimeHeader($item->subject),
+                'body' => $item->body,
+                'snippet' => $this->getCleanSnippet($item->body, 85),
+                'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
+                'is_read' => !$thread['has_unread'],
+                'is_starred' => $thread['has_starred'],
+                'attachments' => $item->attachments ?: [],
+                'spam_reason' => $item->spam_reason,
+                'spam_score' => $item->spam_score,
+            ];
+        })->values();
 
         // Detail email dan Conversation Thread Tree (Gaya Gmail & Chat)
         $selectedEmail = null;
@@ -1456,6 +1485,11 @@ new class extends Component
                             <span class="truncate {{ $email['is_read'] ? 'text-slate-200 font-normal' : 'text-white font-semibold' }}">
                                 {{ $email['subject'] }}
                             </span>
+                            @if(($email['thread_count'] ?? 1) > 1)
+                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 shrink-0" title="{{ $email['thread_count'] }} balasan dalam percakapan ini">
+                                    {{ $email['thread_count'] }}
+                                </span>
+                            @endif
                             @if(!empty($email['snippet']))
                                 <span class="text-slate-500 font-normal truncate hidden md:inline">
                                     - {{ $email['snippet'] }}
