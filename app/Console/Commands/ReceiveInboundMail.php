@@ -101,6 +101,8 @@ class ReceiveInboundMail extends Command
             }
         }
 
+        $extracted = $this->parseMimeBodyAndAttachments($headerStr, $body);
+
         if ($user) {
             MailboxEmail::create([
                 'virtual_user_id' => $user->id,
@@ -112,16 +114,24 @@ class ReceiveInboundMail extends Command
                 'date_human' => $dateHuman,
                 'is_read' => false,
                 'is_starred' => false,
-                'body' => $cleanBody,
-                'attachments' => [],
+                'body' => $extracted['body'],
+                'attachments' => $extracted['attachments'],
             ]);
         }
 
         return Command::SUCCESS;
     }
 
-    protected function extractCleanBody(string $headers, string $body): string
+    /**
+     * Memisahkan body HTML/teks dan mengekstrak file lampiran (attachments)
+     */
+    protected function parseMimeBodyAndAttachments(string $headers, string $body): array
     {
+        $attachments = [];
+        $htmlPart = null;
+        $textPart = null;
+
+        // Cari boundary utama
         $boundary = null;
         if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $headers, $bMatch)) {
             $boundary = trim($bMatch[1]);
@@ -131,42 +141,80 @@ class ReceiveInboundMail extends Command
 
         if ($boundary) {
             $parts = explode('--' . $boundary, $body);
-            $htmlPart = null;
-            $textPart = null;
-
             foreach ($parts as $part) {
                 $part = trim($part);
                 if (empty($part) || $part === '--') continue;
 
-                $subParts = explode("\r\n\r\n", $part, 2);
-                if (count($subParts) < 2) {
-                    $subParts = explode("\n\n", $part, 2);
+                $sub = explode("\r\n\r\n", $part, 2);
+                if (count($sub) < 2) {
+                    $sub = explode("\n\n", $part, 2);
                 }
 
-                $subHeader = $subParts[0] ?? '';
-                $subContent = $subParts[1] ?? '';
+                $partHeader = $sub[0] ?? '';
+                $partContent = $sub[1] ?? '';
 
-                if (stripos($subHeader, 'base64') !== false) {
-                    $subContent = base64_decode(preg_replace('/\s+/', '', $subContent)) ?: $subContent;
-                } elseif (stripos($subHeader, 'quoted-printable') !== false) {
-                    $subContent = quoted_printable_decode($subContent);
+                // Periksa apakah ini lampiran file (attachment / inline file)
+                $filename = null;
+                if (preg_match('/filename\*?=["\']?(?:UTF-8\'\')?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
+                    $filename = urldecode(trim($fnMatch[1]));
+                } elseif (preg_match('/name=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
+                    $filename = trim($fnMatch[1]);
                 }
 
-                if (stripos($subHeader, 'text/html') !== false) {
-                    $htmlPart = trim($subContent);
-                } elseif (stripos($subHeader, 'text/plain') !== false) {
-                    $textPart = trim($subContent);
+                if ($filename) {
+                    // Simpan file lampiran fisik ke storage publik
+                    $cleanFileBase = preg_replace('/\s+/', '', $partContent);
+                    $fileData = base64_decode($cleanFileBase);
+                    if ($fileData !== false) {
+                        $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $filename);
+                        $storagePath = 'attachments/' . $safeName;
+                        @\Illuminate\Support\Facades\Storage::disk('public')->put($storagePath, $fileData);
+
+                        $sizeKb = round(strlen($fileData) / 1024, 1);
+                        $attachments[] = [
+                            'name' => $filename,
+                            'size' => $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB',
+                            'url' => \Illuminate\Support\Facades\Storage::url($storagePath),
+                        ];
+                    }
+                    continue;
+                }
+
+                // Cek jika ini sub-boundary (multipart/alternative di dalam multipart/mixed)
+                if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $innerBMatch)) {
+                    $innerRes = $this->parseMimeBodyAndAttachments($partHeader, $partContent);
+                    if (!empty($innerRes['body'])) {
+                        $htmlPart = $innerRes['body'];
+                    }
+                    if (!empty($innerRes['attachments'])) {
+                        $attachments = array_merge($attachments, $innerRes['attachments']);
+                    }
+                    continue;
+                }
+
+                // Dekode konten teks/HTML
+                if (stripos($partHeader, 'base64') !== false) {
+                    $decoded = base64_decode(preg_replace('/\s+/', '', $partContent));
+                    if ($decoded !== false) $partContent = $decoded;
+                } elseif (stripos($partHeader, 'quoted-printable') !== false) {
+                    $partContent = quoted_printable_decode($partContent);
+                }
+
+                if (stripos($partHeader, 'text/html') !== false) {
+                    $htmlPart = trim($partContent);
+                } elseif (stripos($partHeader, 'text/plain') !== false && empty($textPart)) {
+                    $textPart = trim($partContent);
                 }
             }
-
-            if (!empty($htmlPart)) return $htmlPart;
-            if (!empty($textPart)) return $textPart;
         }
 
-        $cleaned = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $body);
-        $cleaned = preg_replace('/Content-Type:\s*[^;\r\n]+(;\s*charset=[^;\r\n]+)?/i', '', $cleaned);
-        $cleaned = preg_replace('/Content-Transfer-Encoding:\s*[^\r\n]+/i', '', $cleaned);
+        $finalBody = !empty($htmlPart) ? $htmlPart : (!empty($textPart) ? $textPart : $body);
+        // Bersihkan sisa boundary jika ada
+        $finalBody = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $finalBody);
 
-        return trim($cleaned) ?: trim($body);
+        return [
+            'body' => trim($finalBody),
+            'attachments' => $attachments,
+        ];
     }
 }
