@@ -12,6 +12,14 @@ new class extends Component
     public $is_active = true;
     public $search = '';
 
+    // State Edit Modal
+    public $showEditModal = false;
+    public $editingAliasId = null;
+    public $editSourcePrefix = '';
+    public $editDomainId = '';
+    public $editDestinationEmail = '';
+    public $editIsActive = true;
+
     public function mount()
     {
         $firstDomain = VirtualDomain::where('is_active', true)->first();
@@ -50,6 +58,63 @@ new class extends Component
         $this->reset(['source_prefix', 'destination_email']);
         $this->is_active = true;
         session()->flash('message', "Alias {$fullSourceEmail} berhasil diarahkan ke {$this->destination_email}!");
+    }
+
+    public function editAlias($aliasId)
+    {
+        $alias = VirtualAlias::findOrFail($aliasId);
+        $this->editingAliasId = $alias->id;
+        $parts = explode('@', $alias->source_email);
+        $this->editSourcePrefix = $parts[0] ?? '';
+        $this->editDomainId = $alias->domain_id;
+        $this->editDestinationEmail = $alias->destination_email;
+        $this->editIsActive = (bool) $alias->is_active;
+        $this->showEditModal = true;
+    }
+
+    public function closeEditModal()
+    {
+        $this->showEditModal = false;
+        $this->editingAliasId = null;
+        $this->reset(['editSourcePrefix', 'editDomainId', 'editDestinationEmail', 'editIsActive']);
+    }
+
+    public function updateAlias()
+    {
+        $this->validate([
+            'editSourcePrefix' => 'required|string|regex:/^[a-zA-Z0-9._-]+$/',
+            'editDomainId' => 'required|exists:virtual_domains,id',
+            'editDestinationEmail' => 'required|email',
+        ], [
+            'editSourcePrefix.regex' => 'Format alias depan tidak valid (contoh: info, support, billing).',
+            'editDestinationEmail.email' => 'Format email tujuan pengalihan harus valid.',
+        ]);
+
+        $alias = VirtualAlias::findOrFail($this->editingAliasId);
+        $domain = VirtualDomain::findOrFail($this->editDomainId);
+        $fullSourceEmail = strtolower(trim($this->editSourcePrefix)) . '@' . $domain->name;
+        $destEmail = strtolower(trim($this->editDestinationEmail));
+
+        // Cek duplikasi alias selain record ini sendiri
+        $exists = VirtualAlias::where('source_email', $fullSourceEmail)
+            ->where('destination_email', $destEmail)
+            ->where('id', '!=', $alias->id)
+            ->exists();
+
+        if ($exists) {
+            $this->addError('editDestinationEmail', 'Pengalihan dari ' . $fullSourceEmail . ' ke ' . $destEmail . ' sudah terdaftar.');
+            return;
+        }
+
+        $alias->update([
+            'domain_id' => $domain->id,
+            'source_email' => $fullSourceEmail,
+            'destination_email' => $destEmail,
+            'is_active' => $this->editIsActive,
+        ]);
+
+        $this->closeEditModal();
+        session()->flash('message', "Pengalihan alias {$fullSourceEmail} berhasil diperbarui!");
     }
 
     public function toggleStatus($aliasId)
@@ -203,10 +268,17 @@ new class extends Component
                                 </button>
                             </td>
                             <td class="py-3 px-3 text-right">
-                                <button wire:click="deleteAlias({{ $alias->id }})" wire:confirm="Hapus pengalihan alias ini?" 
-                                        class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
+                                <div class="flex items-center justify-end gap-1">
+                                    <button wire:click="editAlias({{ $alias->id }})" title="Edit Pengalihan"
+                                            class="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all cursor-pointer">
+                                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                    </button>
+                                    <button wire:click="deleteAlias({{ $alias->id }})" wire:confirm="Hapus pengalihan alias ini?" 
+                                            title="Hapus Pengalihan"
+                                            class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all cursor-pointer">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         @empty
@@ -221,4 +293,73 @@ new class extends Component
             </div>
         </div>
     </div>
+
+    <!-- Modal Edit Alias & Forwarding -->
+    @if($showEditModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div class="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Edit Pengalihan Email</h3>
+                        <p class="text-[11px] text-slate-400 font-mono">{{ $editSourcePrefix }}</p>
+                    </div>
+                </div>
+                <button wire:click="closeEditModal" class="text-slate-400 hover:text-white transition-colors cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form wire:submit="updateAlias" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Email Sumber (Inbound Address)</label>
+                    <div class="flex flex-col sm:flex-row rounded-lg overflow-hidden border border-slate-700 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                        <input type="text" wire:model="editSourcePrefix" placeholder="info / support" 
+                               class="w-full sm:w-1/2 px-3 py-2 bg-slate-950 text-xs text-white placeholder-slate-500 focus:outline-none border-b sm:border-b-0 sm:border-r border-slate-800 font-mono">
+                        <div class="flex items-center w-full sm:w-1/2 bg-slate-900">
+                            <span class="px-2.5 py-2 text-slate-400 text-xs font-mono select-none">@</span>
+                            <select wire:model="editDomainId" class="w-full px-2 py-2 bg-slate-900 text-xs text-white focus:outline-none font-mono">
+                                @foreach($domains as $dom)
+                                    <option value="{{ $dom->id }}">{{ $dom->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    @error('editSourcePrefix') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                    @error('editDomainId') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Diteruskan Ke (Destination Email)</label>
+                    <input type="email" wire:model="editDestinationEmail" placeholder="admin@domain.com atau email@gmail.com" 
+                           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono">
+                    <p class="text-[10px] text-slate-500 mt-1">Bisa diarahkan ke akun mailbox lokal maupun email luar.</p>
+                    @error('editDestinationEmail') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="edit_alias_active" wire:model="editIsActive" class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                    <label for="edit_alias_active" class="text-xs text-slate-300 cursor-pointer">Pengalihan aktif (Postfix routing)</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button type="button" wire:click="closeEditModal" 
+                            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer">
+                        Batal
+                    </button>
+                    <button type="submit" 
+                            class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center gap-1.5 cursor-pointer">
+                        <span wire:loading.remove wire:target="updateAlias">
+                            <i data-lucide="check" class="w-4 h-4 inline mr-1"></i>Simpan Perubahan
+                        </span>
+                        <span wire:loading wire:target="updateAlias">Menyimpan...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
 </div>

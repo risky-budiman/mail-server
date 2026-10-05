@@ -622,14 +622,14 @@ new class extends Component
     </div>
 
     <!-- Pilihan Tab Metode Migrasi -->
-    <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+    <div class="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
         <button type="button" wire:click="$set('activeTab', 'imap')"
-                class="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 {{ $activeTab === 'imap' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }}">
+                class="px-4 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer {{ $activeTab === 'imap' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60 bg-slate-900/50 border border-slate-800' }}">
             <i data-lucide="cloud-download" class="w-4 h-4"></i>
             <span>Sinkronisasi Langsung IMAP (Hostinger / cPanel / Gmail)</span>
         </button>
         <button type="button" wire:click="$set('activeTab', 'upload')"
-                class="px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 {{ $activeTab === 'upload' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }}">
+                class="px-4 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer {{ $activeTab === 'upload' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/60 bg-slate-900/50 border border-slate-800' }}">
             <i data-lucide="upload-cloud" class="w-4 h-4"></i>
             <span>Upload File Backup (.eml / .zip / Thunderbird)</span>
         </button>
