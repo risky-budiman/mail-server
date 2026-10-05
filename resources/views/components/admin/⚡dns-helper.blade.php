@@ -383,8 +383,17 @@ new class extends Component
                                 </span>
                             </div>
                         </td>
-                        <td class="py-3.5 px-4 font-mono text-white text-xs font-semibold select-all">
-                            {{ $rec['host'] }}
+                        <td class="py-3.5 px-4 font-mono text-white text-xs font-semibold">
+                            <div class="flex items-center gap-2 group" x-data="{ copiedHost: false }">
+                                <span class="select-all">{{ $rec['host'] }}</span>
+                                <button @click="navigator.clipboard.writeText('{{ addslashes($rec['host']) }}'); copiedHost = true; setTimeout(() => copiedHost = false, 2000)" 
+                                        type="button" 
+                                        class="p-1 rounded-md text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors shrink-0" 
+                                        title="Salin Host/Name">
+                                    <i data-lucide="copy" class="w-3 h-3" x-show="!copiedHost"></i>
+                                    <i data-lucide="check" class="w-3 h-3 text-emerald-400" x-show="copiedHost" style="display: none;"></i>
+                                </button>
+                            </div>
                         </td>
                         <td class="py-3.5 px-4">
                             <div class="flex items-center gap-2 group" x-data="{ copied: false }">
@@ -393,10 +402,12 @@ new class extends Component
                                 </code>
                                 <button @click="navigator.clipboard.writeText('{{ addslashes($rec['value']) }}'); copied = true; setTimeout(() => copied = false, 2000)" 
                                         type="button" 
-                                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0" 
-                                        title="Salin Value">
-                                    <i data-lucide="copy" class="w-3.5 h-3.5" x-show="!copied"></i>
-                                    <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400" x-show="copied" style="display: none;"></i>
+                                        class="px-2 py-1 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-indigo-600 transition-all text-[11px] font-semibold flex items-center gap-1.5 shrink-0 shadow-sm border border-slate-700/60" 
+                                        title="Salin Nilai Rekord Ini">
+                                    <i data-lucide="copy" class="w-3 h-3" x-show="!copied"></i>
+                                    <i data-lucide="check" class="w-3 h-3 text-emerald-400" x-show="copied" style="display: none;"></i>
+                                    <span x-show="!copied">Salin</span>
+                                    <span x-show="copied" class="text-emerald-400" style="display: none;">Tersalin!</span>
                                 </button>
                             </div>
                         </td>
@@ -414,6 +425,40 @@ new class extends Component
                     @endforeach
                 </tbody>
             </table>
+        </div>
+
+        <!-- Box Khusus Salin Kunci Publik DKIM Lengkap Tanpa Terpotong -->
+        <div class="mt-4 p-4 rounded-xl bg-slate-950/80 border border-indigo-500/30 space-y-2.5" x-data="{ copiedKey: false, copiedFullRecord: false }">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 text-xs font-bold text-white">
+                    <i data-lucide="key" class="w-4 h-4 text-cyan-400"></i>
+                    <span>Kunci Publik DKIM 2048-bit (Selector: {{ $dkimSelector }}._domainkey.{{ $domainName }})</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="navigator.clipboard.writeText('{{ $dkimPublicKey }}'); copiedKey = true; setTimeout(() => copiedKey = false, 2000)" 
+                            type="button" 
+                            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700 shadow-sm">
+                        <i data-lucide="copy" class="w-3.5 h-3.5" x-show="!copiedKey"></i>
+                        <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400" x-show="copiedKey" style="display: none;"></i>
+                        <span x-show="!copiedKey">Salin String Kunci (p=...)</span>
+                        <span x-show="copiedKey" class="text-emerald-400" style="display: none;">Kunci Berhasil Disalin!</span>
+                    </button>
+                    <button @click="navigator.clipboard.writeText('v=DKIM1; k=rsa; p={{ $dkimPublicKey }}'); copiedFullRecord = true; setTimeout(() => copiedFullRecord = false, 2000)" 
+                            type="button" 
+                            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30">
+                        <i data-lucide="clipboard-check" class="w-3.5 h-3.5" x-show="!copiedFullRecord"></i>
+                        <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400" x-show="copiedFullRecord" style="display: none;"></i>
+                        <span x-show="!copiedFullRecord">Salin Lengkap TXT (v=DKIM1...)</span>
+                        <span x-show="copiedFullRecord" class="text-emerald-400" style="display: none;">Seluruh TXT Disalin!</span>
+                    </button>
+                </div>
+            </div>
+            <textarea readonly rows="3" 
+                      class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 focus:outline-none focus:border-cyan-500 select-all cursor-text resize-none"
+                      onclick="this.select()">v=DKIM1; k=rsa; p={{ $dkimPublicKey }}</textarea>
+            <p class="text-[11px] text-slate-400">
+                💡 <strong class="text-slate-300">Tips Pengaturan DNS:</strong> Masukkan record bertipe <code class="text-cyan-300">TXT</code> dengan Name/Host: <code class="text-cyan-300">{{ $dkimSelector }}._domainkey</code> dan paste seluruh teks di atas ke kolom Value/Content.
+            </p>
         </div>
     </div>
 

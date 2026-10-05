@@ -67,20 +67,41 @@ class MailService
 
     /**
      * Kirim email keluar melalui Postfix SMTP atau /usr/sbin/sendmail
+     * Mendukung lampiran file (PDF, Dokumen Office, Gambar, Zip, dll)
+     * @param array $attachments Array of file paths or uploaded files or ['path' => string, 'name' => string]
      */
-    public static function sendOutboundMail(string $fromEmail, string $fromName, string $to, string $subject, string $bodyContent): bool
+    public static function sendOutboundMail(string $fromEmail, string $fromName, string $to, string $subject, string $bodyContent, array $attachments = []): bool
     {
         $domain = explode('@', $fromEmail)[1] ?? 'sahabatit.my.id';
         $messageId = '<' . time() . '.' . bin2hex(random_bytes(8)) . '@' . $domain . '>';
         $dateRfc2822 = date('r');
 
-        // 1. Coba kirim via Laravel Mailer SMTP / Sendmail
+        // 1. Coba kirim via Laravel Mailer SMTP / Sendmail dengan format Multipart Alternative (HTML + Text Plain)
         try {
-            Mail::mailer(config('mail.default', 'sendmail'))->html($bodyContent, function ($message) use ($fromEmail, $fromName, $to, $subject, $messageId) {
+            $plainText = trim(strip_tags(preg_replace('/<br\s*\/?>/i', "\n", $bodyContent)));
+            $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+            $formattedHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
+
+            Mail::mailer(config('mail.default', 'sendmail'))->send([], [], function ($message) use ($fromEmail, $fromName, $to, $subject, $messageId, $attachments, $plainText, $formattedHtml) {
                 $message->from($fromEmail, $fromName)
                         ->to($to)
-                        ->subject($subject);
+                        ->subject($subject)
+                        ->text($plainText)
+                        ->html($formattedHtml);
                 $message->getHeaders()->addIdHeader('Message-ID', $messageId);
+
+                // Lampirkan file jika ada
+                foreach ($attachments as $att) {
+                    if (is_string($att) && file_exists($att)) {
+                        $message->attach($att);
+                    } elseif (is_array($att) && !empty($att['path']) && file_exists($att['path'])) {
+                        $message->attach($att['path'], ['as' => $att['name'] ?? basename($att['path'])]);
+                    } elseif (is_object($att) && method_exists($att, 'getRealPath') && file_exists($att->getRealPath())) {
+                        $message->attach($att->getRealPath(), [
+                            'as' => method_exists($att, 'getClientOriginalName') ? $att->getClientOriginalName() : basename($att->getRealPath()),
+                        ]);
+                    }
+                }
             });
             return true;
         } catch (\Throwable $e) {
@@ -90,23 +111,72 @@ class MailService
         // 2. Fallback: Langsung pipe ke binary Postfix sendmail (/usr/sbin/sendmail) di Linux VPS
         if (PHP_OS_FAMILY === 'Linux' && file_exists('/usr/sbin/sendmail')) {
             try {
-                // Header lengkap standar RFC 5322 agar 100% lolos filter Gmail / Yahoo
+                $mixedBoundary = "==_MailIDS_Mixed_" . md5(uniqid(microtime(true)));
+                $altBoundary = "==_MailIDS_Alt_" . md5(uniqid(microtime(true) . 'alt'));
+
+                $plainText = trim(strip_tags(preg_replace('/<br\s*\/?>/i', "\n", $bodyContent)));
+                $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+                $formattedContent = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
+
                 $headers = "From: {$fromName} <{$fromEmail}>\r\n" .
                            "Reply-To: {$fromName} <{$fromEmail}>\r\n" .
                            "Date: {$dateRfc2822}\r\n" .
                            "Message-ID: {$messageId}\r\n" .
                            "MIME-Version: 1.0\r\n" .
-                           "X-Mailer: MailIDS-Webmail/1.0\r\n" .
-                           "Content-Type: text/html; charset=UTF-8\r\n" .
-                           "Content-Transfer-Encoding: 8bit\r\n";
+                           "X-Mailer: MailIDS-Webmail/1.0\r\n";
 
-                $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
-                $formattedContent = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
+                // Sub-blok multipart/alternative yang memuat text/plain dan text/html
+                $alternativeBody = "--{$altBoundary}\r\n" .
+                                   "Content-Type: text/plain; charset=UTF-8\r\n" .
+                                   "Content-Transfer-Encoding: 8bit\r\n\r\n" .
+                                   $plainText . "\r\n\r\n" .
+                                   "--{$altBoundary}\r\n" .
+                                   "Content-Type: text/html; charset=UTF-8\r\n" .
+                                   "Content-Transfer-Encoding: 8bit\r\n\r\n" .
+                                   $formattedContent . "\r\n\r\n" .
+                                   "--{$altBoundary}--\r\n";
 
-                $rawMsg = "To: {$to}\r\n" .
-                          "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n" .
-                          $headers . "\r\n" .
-                          $formattedContent . "\r\n";
+                if (!empty($attachments)) {
+                    $headers .= "Content-Type: multipart/mixed; boundary=\"{$mixedBoundary}\"\r\n";
+                    $rawMsg = "To: {$to}\r\n" .
+                              "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n" .
+                              $headers . "\r\n" .
+                              "--{$mixedBoundary}\r\n" .
+                              "Content-Type: multipart/alternative; boundary=\"{$altBoundary}\"\r\n\r\n" .
+                              $alternativeBody . "\r\n";
+
+                    foreach ($attachments as $att) {
+                        $filePath = null;
+                        $fileName = 'attachment';
+                        if (is_string($att) && file_exists($att)) {
+                            $filePath = $att;
+                            $fileName = basename($att);
+                        } elseif (is_array($att) && !empty($att['path']) && file_exists($att['path'])) {
+                            $filePath = $att['path'];
+                            $fileName = $att['name'] ?? basename($att['path']);
+                        } elseif (is_object($att) && method_exists($att, 'getRealPath')) {
+                            $filePath = $att->getRealPath();
+                            $fileName = method_exists($att, 'getClientOriginalName') ? $att->getClientOriginalName() : basename($filePath);
+                        }
+
+                        if ($filePath && file_exists($filePath)) {
+                            $mime = mime_content_type($filePath) ?: 'application/octet-stream';
+                            $fileData = chunk_split(base64_encode(file_get_contents($filePath)));
+                            $rawMsg .= "--{$mixedBoundary}\r\n" .
+                                       "Content-Type: {$mime}; name=\"{$fileName}\"\r\n" .
+                                       "Content-Disposition: attachment; filename=\"{$fileName}\"\r\n" .
+                                       "Content-Transfer-Encoding: base64\r\n\r\n" .
+                                       $fileData . "\r\n";
+                        }
+                    }
+                    $rawMsg .= "--{$mixedBoundary}--\r\n";
+                } else {
+                    $headers .= "Content-Type: multipart/alternative; boundary=\"{$altBoundary}\"\r\n";
+                    $rawMsg = "To: {$to}\r\n" .
+                              "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n" .
+                              $headers . "\r\n" .
+                              $alternativeBody;
+                }
 
                 // Kirim dengan parameter -f agar Return-Path cocok dengan pengirim (SPF alignment)
                 $pipe = @popen("/usr/sbin/sendmail -t -i -f " . escapeshellarg($fromEmail), "w");

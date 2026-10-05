@@ -24,12 +24,23 @@
 
     @livewireScripts
     <script>
-        document.addEventListener('livewire:navigated', () => {
-            if (window.lucide) window.lucide.createIcons();
+        window.refreshIcons = function() {
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', window.refreshIcons);
+        document.addEventListener('livewire:navigated', window.refreshIcons);
+        document.addEventListener('livewire:init', () => {
+            window.refreshIcons();
+            if (typeof Livewire !== 'undefined' && Livewire.hook) {
+                Livewire.hook('commit', ({ succeed }) => succeed(() => queueMicrotask(() => window.refreshIcons())));
+            }
         });
-        document.addEventListener('DOMContentLoaded', () => {
-            if (window.lucide) window.lucide.createIcons();
-        });
+
+        const lucideObserver = new MutationObserver(() => window.refreshIcons());
+        lucideObserver.observe(document.body, { childList: true, subtree: true });
     </script>
 </body>
 </html>

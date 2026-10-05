@@ -49,6 +49,75 @@ new class extends Component
     public $quickReplyText = '';
     public $quickReplyAttachments = [];
 
+    // User Profile / Settings modal state
+    public $showSettingsModal = false;
+    public $settingsTab = 'profile'; // 'profile' or 'password'
+    public $settingsName = '';
+    public $settingsCurrentPassword = '';
+    public $settingsNewPassword = '';
+    public $settingsNewPasswordConfirmation = '';
+
+    public function openSettingsModal()
+    {
+        $user = $this->getAccount();
+        if ($user) {
+            $this->settingsName = $user->name ?? '';
+            $this->settingsCurrentPassword = '';
+            $this->settingsNewPassword = '';
+            $this->settingsNewPasswordConfirmation = '';
+            $this->settingsTab = 'profile';
+            $this->showSettingsModal = true;
+        }
+    }
+
+    public function closeSettingsModal()
+    {
+        $this->showSettingsModal = false;
+        $this->reset(['settingsCurrentPassword', 'settingsNewPassword', 'settingsNewPasswordConfirmation']);
+    }
+
+    public function updateProfile()
+    {
+        $this->validate([
+            'settingsName' => 'required|string|min:2|max:100',
+        ]);
+
+        $user = $this->getAccount();
+        if ($user) {
+            $user->name = trim($this->settingsName);
+            $user->save();
+            $this->currentAccount = $user->fresh();
+            session()->flash('settings_success', 'Profil nama pengguna berhasil diperbarui!');
+        }
+    }
+
+    public function updatePassword()
+    {
+        $this->validate([
+            'settingsCurrentPassword' => 'required|string',
+            'settingsNewPassword' => 'required|string|min:6|same:settingsNewPasswordConfirmation',
+        ], [
+            'settingsCurrentPassword.required' => 'Password saat ini harus diisi.',
+            'settingsNewPassword.required' => 'Password baru harus diisi.',
+            'settingsNewPassword.min' => 'Password baru minimal 6 karakter.',
+            'settingsNewPassword.same' => 'Konfirmasi password baru tidak cocok.',
+        ]);
+
+        $user = $this->getAccount();
+        if ($user) {
+            if (!\Illuminate\Support\Facades\Hash::check($this->settingsCurrentPassword, $user->password)) {
+                $this->addError('settingsCurrentPassword', 'Password saat ini salah!');
+                return;
+            }
+
+            $user->password = \Illuminate\Support\Facades\Hash::make($this->settingsNewPassword);
+            $user->save();
+
+            $this->reset(['settingsCurrentPassword', 'settingsNewPassword', 'settingsNewPasswordConfirmation']);
+            session()->flash('settings_success', 'Password mailbox berhasil diubah!');
+        }
+    }
+
     protected function getAccount()
     {
         return auth('mailbox')->user() ?? VirtualUser::first();
@@ -74,10 +143,7 @@ new class extends Component
                 $this->customFolders = $dbFolders;
             }
 
-            // 2. Pastikan database terisi seed jika masih kosong
-            $this->seedInitialEmailsIfEmpty();
-
-            // 3. Sinkronkan email riil yang masuk di harddisk VPS (/var/vmail) secara otomatis
+            // 2. Sinkronkan email riil yang masuk di harddisk VPS (/var/vmail) secara otomatis
             $this->syncFromMaildir($user);
         }
     }
@@ -634,17 +700,47 @@ new class extends Component
         }
     }
 
+    public function deleteSingleEmail($id)
+    {
+        $user = $this->getAccount();
+        if ($user && $id) {
+            $item = MailboxEmail::where('virtual_user_id', $user->id)->find($id);
+            if ($item) {
+                if ($item->folder === 'trash' || $this->activeFolder === 'trash') {
+                    $this->deletePhysicalMailFile($user, $item);
+                    $item->delete();
+                    session()->flash('webmail_msg', 'Pesan berhasil dihapus secara permanen.');
+                } else {
+                    $item->update(['folder' => 'trash']);
+                    session()->flash('webmail_msg', 'Pesan dipindahkan ke Sampah.');
+                }
+            }
+        }
+        $this->selectFolder($this->activeFolder);
+    }
+
     public function deleteSelectedMultiple()
     {
         if (empty($this->selectedIds)) return;
         $user = $this->getAccount();
         if ($user) {
-            MailboxEmail::where('virtual_user_id', $user->id)
-                ->whereIn('id', $this->selectedIds)
-                ->update(['folder' => 'trash']);
+            if ($this->activeFolder === 'trash') {
+                $items = MailboxEmail::where('virtual_user_id', $user->id)
+                    ->whereIn('id', $this->selectedIds)
+                    ->get();
+                foreach ($items as $it) {
+                    $this->deletePhysicalMailFile($user, $it);
+                    $it->delete();
+                }
+                session()->flash('webmail_msg', count($this->selectedIds) . ' pesan berhasil dihapus secara permanen.');
+            } else {
+                MailboxEmail::where('virtual_user_id', $user->id)
+                    ->whereIn('id', $this->selectedIds)
+                    ->update(['folder' => 'trash']);
+                session()->flash('webmail_msg', count($this->selectedIds) . ' pesan terpilih dipindahkan ke Sampah.');
+            }
         }
         $this->selectedIds = [];
-        session()->flash('webmail_msg', 'Pesan terpilih dipindahkan ke Sampah.');
     }
 
     public function markMultipleRead()
@@ -740,13 +836,73 @@ new class extends Component
         $this->quickReplyAttachments = [];
     }
 
+    public function removeAttachment($index)
+    {
+        if (isset($this->attachments[$index])) {
+            unset($this->attachments[$index]);
+            $this->attachments = array_values($this->attachments);
+        }
+    }
+
+    public function removeQuickReplyAttachment($index)
+    {
+        if (isset($this->quickReplyAttachments[$index])) {
+            unset($this->quickReplyAttachments[$index]);
+            $this->quickReplyAttachments = array_values($this->quickReplyAttachments);
+        }
+    }
+
+    /**
+     * Hapus file email fisik dari Maildir Dovecot (/var/vmail/domain/user/{new,cur})
+     * agar saat reload / syncFromMaildir email tidak terimpor ulang.
+     */
+    protected function deletePhysicalMailFile($user, $item): void
+    {
+        if (!$user || !$item) return;
+
+        $targetKey = null;
+        if (!empty($item->body) && preg_match('/\[UID:([a-f0-9]{32})\]/i', $item->body, $matches)) {
+            $targetKey = $matches[1];
+        }
+
+        $parts = explode('@', $user->email);
+        $localPart = $parts[0] ?? '';
+        $domain = $parts[1] ?? '';
+        $maildirBase = '/var/vmail/' . ($domain ? "{$domain}/{$localPart}" : ltrim($user->maildir_path, '/'));
+
+        if (!is_dir($maildirBase)) return;
+
+        $subdirs = ['new', 'cur'];
+        foreach ($subdirs as $sub) {
+            $dirPath = "{$maildirBase}/{$sub}";
+            if (!is_dir($dirPath)) continue;
+
+            $files = @scandir($dirPath);
+            if (!$files) continue;
+
+            foreach ($files as $file) {
+                if ($file === '.' || $file === '..' || str_starts_with($file, '.')) continue;
+                $fullFile = "{$dirPath}/{$file}";
+
+                if ($targetKey) {
+                    $fileKey = md5("{$user->id}_{$file}");
+                    if ($fileKey === $targetKey) {
+                        @unlink($fullFile);
+                        break 2;
+                    }
+                }
+            }
+        }
+    }
+
     public function deleteSelectedEmail()
     {
         $user = $this->getAccount();
         if ($user && $this->selectedEmailId) {
             $item = MailboxEmail::where('virtual_user_id', $user->id)->find($this->selectedEmailId);
             if ($item) {
-                if ($item->folder === 'trash') {
+                if ($item->folder === 'trash' || $this->activeFolder === 'trash') {
+                    $this->deletePhysicalMailFile($user, $item);
                     $item->delete();
                     session()->flash('webmail_msg', 'Pesan berhasil dihapus secara permanen.');
                 } else {
@@ -755,6 +911,8 @@ new class extends Component
                 }
             }
         }
+        $this->selectedEmailId = null;
+        $this->viewMode = 'list';
         $this->selectFolder($this->activeFolder);
     }
 
@@ -774,12 +932,18 @@ new class extends Component
     {
         $user = $this->getAccount();
         if ($user) {
-            MailboxEmail::where('virtual_user_id', $user->id)
+            $trashItems = MailboxEmail::where('virtual_user_id', $user->id)
                 ->where('folder', 'trash')
-                ->delete();
+                ->get();
+
+            foreach ($trashItems as $tItem) {
+                $this->deletePhysicalMailFile($user, $tItem);
+                $tItem->delete();
+            }
         }
+        $this->selectedEmailId = null;
         $this->selectFolder('trash');
-        session()->flash('webmail_msg', 'Folder Sampah telah dikosongkan.');
+        session()->flash('webmail_msg', 'Folder Sampah telah dikosongkan secara permanen.');
     }
 
     public function emptySpam()
@@ -918,7 +1082,8 @@ new class extends Component
             $fromName,
             $this->composeTo,
             $this->composeSubject,
-            $this->composeBody
+            $this->composeBody,
+            $this->attachments ?? []
         );
 
         MailboxEmail::create([
@@ -980,7 +1145,8 @@ new class extends Component
             $fromName,
             $recipient,
             $subject,
-            $this->quickReplyText
+            $this->quickReplyText,
+            $this->quickReplyAttachments ?? []
         );
 
         MailboxEmail::create([
@@ -1285,8 +1451,26 @@ new class extends Component
             </div>
         @endif
 
-        <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 shadow-inner">
+        <div class="flex items-center gap-2.5">
+            <!-- Tombol Refresh Utama yang Konsisten dan Terpusat -->
+            <button type="button" 
+                    wire:click="refreshInbox" 
+                    class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/70 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                    title="Segarkan Kotak Masuk (Tarik Email Baru dari Dovecot)">
+                <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
+                <span class="hidden sm:inline">Segarkan</span>
+            </button>
+
+            <!-- Tombol Pengaturan Akun (Settings: Ganti Nama, Password) -->
+            <button type="button" 
+                    wire:click="openSettingsModal" 
+                    class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-300 border border-slate-700/70 hover:border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                    title="Pengaturan Akun Pengguna">
+                <i data-lucide="settings" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <span class="hidden sm:inline">Pengaturan</span>
+            </button>
+
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 shadow-inner">
                 <span class="relative flex h-2 w-2">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -1310,31 +1494,21 @@ new class extends Component
                     </button>
                 </div>
 
-                <!-- Inbox dengan Tombol Refresh (Gaya Hostinger) -->
-                <div class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
-                    <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false" class="flex-1 flex items-center gap-2.5 truncate text-left">
+                <!-- Kotak Masuk (Inbox) -->
+                <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                    <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
                             <i data-lucide="inbox" class="w-3.5 h-3.5"></i>
                         </div>
-                        <span class="truncate">Kotak Masuk</span>
-                    </button>
-                    
-                    <div class="flex items-center gap-1.5 shrink-0">
-                        @if($counts['inbox'] > 0)
-                            <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' }} font-bold">
-                                {{ $counts['inbox'] }}
-                            </span>
-                        @endif
-                        
-                        <!-- Tombol Refresh Kotak Masuk -->
-                        <button type="button" 
-                                wire:click.stop="refreshInbox" 
-                                class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'text-white/80 hover:text-white hover:bg-white/20' : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800' }} transition-all"
-                                title="Segarkan Kotak Masuk">
-                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
-                        </button>
+                        <span>Kotak Masuk</span>
                     </div>
-                </div>
+                    @if($counts['inbox'] > 0)
+                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'inbox' ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' }} font-bold">
+                            {{ $counts['inbox'] }}
+                        </span>
+                    @endif
+                </button>
 
                 <!-- Sent -->
                 <button wire:click="selectFolder('sent')" @click="showFolderSidebar = false"
@@ -1476,12 +1650,6 @@ new class extends Component
                                     <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
                                 @endif
                             </h1>
-                            <button type="button" 
-                                    wire:click="refreshInbox" 
-                                    class="p-1.5 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border border-slate-700/60 transition-colors"
-                                    title="Segarkan Pesan (Refresh Inbox)">
-                                <i data-lucide="rotate-cw" class="w-3.5 h-3.5" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
-                            </button>
                         </div>
 
                         <!-- Filter Chips: All mail, Unread, Read, Starred (Gaya Hostinger/Gmail) -->
@@ -1617,7 +1785,7 @@ new class extends Component
                                 <button wire:click="toggleReadStatus({{ $email['id'] }})" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white" title="{{ $email['is_read'] ? 'Tandai Belum Dibaca' : 'Tandai Sudah Dibaca' }}">
                                     <i data-lucide="{{ $email['is_read'] ? 'mail' : 'mail-open' }}" class="w-3.5 h-3.5"></i>
                                 </button>
-                                <button wire:click="moveToFolder('trash')" class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400" title="Hapus">
+                                <button wire:click="deleteSingleEmail({{ $email['id'] }})" class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400" title="{{ $activeFolder === 'trash' ? 'Hapus Permanen' : 'Pindahkan ke Sampah' }}">
                                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
@@ -1675,7 +1843,7 @@ new class extends Component
                             @if($activeFolder !== 'trash')
                             <button wire:click="deleteSelectedEmail" 
                                     class="p-2 rounded-xl hover:text-rose-400 hover:bg-slate-800 transition-colors" 
-                                    title="Hapus Pesan">
+                                    title="Pindahkan ke Sampah">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                             @else
@@ -1684,6 +1852,11 @@ new class extends Component
                                     title="Kembalikan ke Kotak Masuk">
                                 <i data-lucide="archive-restore" class="w-4 h-4"></i>
                                 <span>Kembalikan</span>
+                            </button>
+                            <button wire:click="deleteSelectedEmail" 
+                                    class="p-2 rounded-xl text-rose-400 hover:bg-rose-500/20 transition-colors" 
+                                    title="Hapus Permanen">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                             @endif
 
@@ -2093,10 +2266,16 @@ new class extends Component
                         <!-- Attached Files Badge if any -->
                         @if(!empty($quickReplyAttachments))
                         <div class="flex flex-wrap gap-2 pt-1">
-                            @foreach($quickReplyAttachments as $file)
-                            <span class="px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-mono flex items-center gap-1.5">
-                                <i data-lucide="file-check" class="w-3 h-3 text-emerald-400"></i>
-                                {{ $file->getClientOriginalName() }}
+                            @foreach($quickReplyAttachments as $index => $file)
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-700 text-xs text-cyan-300 font-mono shadow-sm">
+                                <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                                <span class="max-w-[150px] truncate">{{ method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'File' }}</span>
+                                <button type="button" 
+                                        wire:click="removeQuickReplyAttachment({{ $index }})" 
+                                        class="p-0.5 rounded-full hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors" 
+                                        title="Batal lampirkan file ini">
+                                    <i data-lucide="x" class="w-3 h-3"></i>
+                                </button>
                             </span>
                             @endforeach
                         </div>
@@ -2251,10 +2430,16 @@ new class extends Component
 
                         @if(!empty($attachments))
                         <div class="flex flex-wrap gap-2 mt-2.5">
-                            @foreach($attachments as $file)
-                            <span class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-cyan-300 font-mono flex items-center gap-2 shadow-sm">
-                                <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400"></i>
-                                {{ $file->getClientOriginalName() }}
+                            @foreach($attachments as $index => $file)
+                            <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-cyan-300 font-mono shadow-sm">
+                                <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                                <span class="max-w-[180px] truncate">{{ method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'File' }}</span>
+                                <button type="button" 
+                                        wire:click="removeAttachment({{ $index }})" 
+                                        class="p-0.5 rounded-full hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors" 
+                                        title="Batal lampirkan file ini">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
                             </span>
                             @endforeach
                         </div>
@@ -2324,6 +2509,153 @@ new class extends Component
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+    @endif
+
+    <!-- ============================================================== -->
+    <!-- MODAL PENGATURAN USER (PENGATURAN NAMA, PASSWORD, INFO AKUN)  -->
+    <!-- ============================================================== -->
+    @if($showSettingsModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+         wire:key="user-settings-modal">
+        <div class="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-up border-glow">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white tracking-wide">Pengaturan Akun Pengguna</h3>
+                        <p class="text-[11px] text-slate-400">Kelola profil display nama dan keamanan kata sandi email Anda</p>
+                    </div>
+                </div>
+                <button type="button" wire:click="closeSettingsModal" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Tutup">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Tab Navigasi: Profil vs Ganti Password -->
+            <div class="px-6 pt-3 border-b border-slate-800/80 bg-slate-950/40 flex items-center gap-4 text-xs font-semibold">
+                <button type="button" 
+                        wire:click="$set('settingsTab', 'profile')"
+                        class="pb-2.5 border-b-2 flex items-center gap-2 transition-all {{ $settingsTab === 'profile' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200' }}">
+                    <i data-lucide="user" class="w-3.5 h-3.5"></i>
+                    <span>Informasi Profil</span>
+                </button>
+                <button type="button" 
+                        wire:click="$set('settingsTab', 'password')"
+                        class="pb-2.5 border-b-2 flex items-center gap-2 transition-all {{ $settingsTab === 'password' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-slate-200' }}">
+                    <i data-lucide="key-round" class="w-3.5 h-3.5"></i>
+                    <span>Ganti Kata Sandi</span>
+                </button>
+            </div>
+
+            <!-- Modal Content Body -->
+            <div class="p-6 overflow-y-auto space-y-4">
+                @if (session()->has('settings_success'))
+                    <div class="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 shadow-sm">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i>
+                        <span>{{ session('settings_success') }}</span>
+                    </div>
+                @endif
+
+                <!-- TAB 1: INFORMASI PROFIL & NAMA LENGKAP -->
+                @if($settingsTab === 'profile')
+                <form wire:submit.prevent="updateProfile" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">Alamat Email (Akun Tetap)</label>
+                        <div class="px-4 py-2.5 bg-slate-950/60 border border-slate-800 rounded-2xl text-slate-400 font-mono flex items-center justify-between">
+                            <span>{{ $currentAccount->email ?? '-' }}</span>
+                            <span class="text-[10px] text-emerald-400 font-sans font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Aktif</span>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1">Alamat email dikelola oleh Administrator server.</p>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">
+                            Nama Tampilan (Display Name) <span class="text-rose-400">*</span>
+                        </label>
+                        <input type="text" wire:model="settingsName" placeholder="Contoh: Budi Santoso, S.Kom" 
+                               class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500">
+                        @error('settingsName') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        <p class="text-[10px] text-slate-500 mt-1">Nama ini akan terlihat oleh penerima saat Anda mengirimkan email keluar.</p>
+                    </div>
+
+                    <!-- Detail Tambahan Akun Mailbox -->
+                    <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 text-[11px] text-slate-400">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400">Alokasi Kuota Mailbox:</span>
+                            <span class="text-white font-mono font-medium">{{ $currentAccount ? $currentAccount->formatted_quota : '-' }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400">Penyimpanan Terpakai:</span>
+                            <span class="text-cyan-300 font-mono font-medium">{{ $currentAccount ? $currentAccount->formatted_used : '-' }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400">Protokol Mail Server:</span>
+                            <span class="text-slate-300 font-mono">IMAP (Port 993) / SMTP (587)</span>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                        <button type="button" wire:click="closeSettingsModal" class="px-4 py-2 text-slate-400 hover:text-white font-medium">
+                            Tutup
+                        </button>
+                        <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-600/25 transition-all flex items-center gap-2">
+                            <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                            <span wire:loading.remove wire:target="updateProfile">Simpan Profil</span>
+                            <span wire:loading wire:target="updateProfile">Menyimpan...</span>
+                        </button>
+                    </div>
+                </form>
+                @endif
+
+                <!-- TAB 2: GANTI PASSWORD USER -->
+                @if($settingsTab === 'password')
+                <form wire:submit.prevent="updatePassword" class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">
+                            Kata Sandi Saat Ini <span class="text-rose-400">*</span>
+                        </label>
+                        <input type="password" wire:model="settingsCurrentPassword" placeholder="Masukkan password sekarang" 
+                               class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono">
+                        @error('settingsCurrentPassword') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">
+                            Kata Sandi Baru <span class="text-rose-400">*</span>
+                        </label>
+                        <input type="password" wire:model="settingsNewPassword" placeholder="Minimal 6 karakter" 
+                               class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono">
+                        @error('settingsNewPassword') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">
+                            Konfirmasi Kata Sandi Baru <span class="text-rose-400">*</span>
+                        </label>
+                        <input type="password" wire:model="settingsNewPasswordConfirmation" placeholder="Ulangi password baru" 
+                               class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono">
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                        <button type="button" wire:click="closeSettingsModal" class="px-4 py-2 text-slate-400 hover:text-white font-medium">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-600/25 transition-all flex items-center gap-2">
+                            <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                            <span wire:loading.remove wire:target="updatePassword">Perbarui Password</span>
+                            <span wire:loading wire:target="updatePassword">Memproses...</span>
+                        </button>
+                    </div>
+                </form>
+                @endif
+            </div>
+
         </div>
     </div>
     @endif

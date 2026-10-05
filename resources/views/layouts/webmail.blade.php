@@ -106,24 +106,52 @@
 
     @livewireScripts
     <script>
-        let iconTimeout = null;
-        function refreshIcons() {
-            if (iconTimeout) cancelAnimationFrame(iconTimeout);
-            iconTimeout = requestAnimationFrame(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            });
-        }
-        document.addEventListener('livewire:navigated', refreshIcons);
-        document.addEventListener('DOMContentLoaded', refreshIcons);
+        window.refreshIcons = function() {
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        };
+
+        // 1. Initial page load events
+        document.addEventListener('DOMContentLoaded', window.refreshIcons);
+        document.addEventListener('livewire:navigated', window.refreshIcons);
+
+        // 2. Livewire v3 dynamic DOM update hooks
         document.addEventListener('livewire:init', () => {
-            Livewire.hook('commit', ({ succeed }) => {
-                succeed(() => {
-                    refreshIcons();
+            window.refreshIcons();
+
+            if (typeof Livewire !== 'undefined' && Livewire.hook) {
+                Livewire.hook('element.init', () => window.refreshIcons());
+                Livewire.hook('morph.updated', () => window.refreshIcons());
+                Livewire.hook('morph.added', () => window.refreshIcons());
+                Livewire.hook('commit', ({ succeed }) => {
+                    succeed(() => {
+                        queueMicrotask(() => window.refreshIcons());
+                    });
                 });
-            });
+            }
         });
+
+        // 3. MutationObserver: otomatis render ikon baru seketika jika ada elemen <i data-lucide="..."> ditambahkan saat insert data/update modal
+        const lucideObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (node.hasAttribute && node.hasAttribute('data-lucide')) {
+                                window.refreshIcons();
+                                return;
+                            }
+                            if (node.querySelector && node.querySelector('[data-lucide]')) {
+                                window.refreshIcons();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        lucideObserver.observe(document.body, { childList: true, subtree: true });
     </script>
 </body>
 </html>
