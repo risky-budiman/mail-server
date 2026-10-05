@@ -217,10 +217,14 @@
 
     @livewireScripts
     <script>
+        let iconRaf = null;
         window.refreshIcons = function() {
-            if (window.lucide && typeof window.lucide.createIcons === 'function') {
-                window.lucide.createIcons();
-            }
+            if (iconRaf) cancelAnimationFrame(iconRaf);
+            iconRaf = requestAnimationFrame(() => {
+                if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
+            });
         };
 
         // 1. Initial page load events
@@ -232,35 +236,17 @@
             window.refreshIcons();
 
             if (typeof Livewire !== 'undefined' && Livewire.hook) {
-                Livewire.hook('element.init', () => window.refreshIcons());
-                Livewire.hook('morph.updated', () => window.refreshIcons());
-                Livewire.hook('morph.added', () => window.refreshIcons());
                 Livewire.hook('commit', ({ succeed }) => {
                     succeed(() => {
-                        queueMicrotask(() => window.refreshIcons());
+                        window.refreshIcons();
                     });
                 });
             }
         });
 
-        // 3. MutationObserver: otomatis render ikon baru seketika jika ada elemen <i data-lucide="..."> ditambahkan
-        const lucideObserver = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                if (mutation.type === 'childList') {
-                    for (const node of mutation.addedNodes) {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            if (node.hasAttribute && node.hasAttribute('data-lucide')) {
-                                window.refreshIcons();
-                                return;
-                            }
-                            if (node.querySelector && node.querySelector('[data-lucide]')) {
-                                window.refreshIcons();
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
+        // 3. MutationObserver ringan dengan requestAnimationFrame
+        const lucideObserver = new MutationObserver(() => {
+            window.refreshIcons();
         });
         lucideObserver.observe(document.body, { childList: true, subtree: true });
     </script>

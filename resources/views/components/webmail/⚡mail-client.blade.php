@@ -143,8 +143,12 @@ new class extends Component
                 $this->customFolders = $dbFolders;
             }
 
-            // 2. Sinkronkan email riil yang masuk di harddisk VPS (/var/vmail) secara otomatis
-            $this->syncFromMaildir($user);
+            // 2. Sinkronkan email riil dari harddisk VPS (/var/vmail) secara teratur (dibatasi 1x per 2 menit agar loading secepat kilat)
+            $lastSyncKey = "maildir_last_sync_{$user->id}";
+            if (!cache()->has($lastSyncKey)) {
+                $this->syncFromMaildir($user);
+                cache()->put($lastSyncKey, true, now()->addMinutes(2));
+            }
         }
     }
 
