@@ -104,21 +104,36 @@ class SyncOpenDkim extends Command
         }
 
         if (PHP_OS_FAMILY === 'Linux') {
+            $cantWrite = false;
+            $writeErrorMsg = '';
+
             // Tulis SigningTable
             $signingFile = "{$openDkimBaseDir}/SigningTable";
-            file_put_contents($signingFile, implode("\n", $signingEntries) . "\n");
-            $this->info(" - Ditulis: {$signingFile}");
+            $signingContent = implode("\n", $signingEntries) . "\n";
+            if (!$this->safeWriteFile($signingFile, $signingContent, $writeErrorMsg)) {
+                $cantWrite = true;
+            } else {
+                $this->info(" - Ditulis: {$signingFile}");
+            }
 
             // Tulis KeyTable
             $keyTableFile = "{$openDkimBaseDir}/KeyTable";
-            file_put_contents($keyTableFile, implode("\n", $keyEntries) . "\n");
-            $this->info(" - Ditulis: {$keyTableFile}");
+            $keyContent = implode("\n", $keyEntries) . "\n";
+            if (!$this->safeWriteFile($keyTableFile, $keyContent, $writeErrorMsg)) {
+                $cantWrite = true;
+            } else {
+                $this->info(" - Ditulis: {$keyTableFile}");
+            }
 
             // Tulis TrustedHosts
             $trustedHosts = array_unique($trustedHosts);
             $trustedHostsFile = "{$openDkimBaseDir}/TrustedHosts";
-            file_put_contents($trustedHostsFile, implode("\n", $trustedHosts) . "\n");
-            $this->info(" - Ditulis: {$trustedHostsFile}");
+            $trustedContent = implode("\n", $trustedHosts) . "\n";
+            if (!$this->safeWriteFile($trustedHostsFile, $trustedContent, $writeErrorMsg)) {
+                $cantWrite = true;
+            } else {
+                $this->info(" - Ditulis: {$trustedHostsFile}");
+            }
 
             // Pastikan master opendkim.conf lengkap
             $this->ensureMasterConfig($openDkimBaseDir);
@@ -136,12 +151,44 @@ class SyncOpenDkim extends Command
             $this->line(" - Merestart OpenDKIM & Postfix...");
             @exec("systemctl restart opendkim postfix");
 
-            $this->info("SUKSES: Seluruh domain telah disinkronkan ke OpenDKIM dan Postfix.");
+            if ($cantWrite) {
+                $this->warn("CATATAN: Penulisan langsung ke /etc/opendkim via web PHP-FPM dicegah oleh keamanan OS (Read-only sandbox).");
+                $this->warn("Silakan jalankan perintah ini satu kali via SSH root: php artisan mail:sync-dkim");
+            } else {
+                $this->info("SUKSES: Seluruh domain telah disinkronkan ke OpenDKIM dan Postfix.");
+            }
         } else {
             $this->warn("Lingkungan Windows terdeteksi (Simulasi). Di Linux script akan menulis file konfigurasi secara otomatis.");
         }
 
         return 0;
+    }
+
+    /**
+     * Tulis file dengan proteksi error handling
+     */
+    protected function safeWriteFile(string $path, string $content, string &$error): bool
+    {
+        try {
+            $res = @file_put_contents($path, $content);
+            if ($res === false) {
+                // Coba via shell_exec jika web server punya akses sudo
+                $tmpPath = tempnam(sys_get_temp_dir(), 'dkim_');
+                if ($tmpPath && @file_put_contents($tmpPath, $content) !== false) {
+                    @shell_exec("cp " . escapeshellarg($tmpPath) . " " . escapeshellarg($path) . " 2>/dev/null");
+                    @unlink($tmpPath);
+                    if (file_exists($path) && file_get_contents($path) === $content) {
+                        return true;
+                    }
+                }
+                $error = "Tidak dapat menulis ke {$path} (Read-only / Permission).";
+                return false;
+            }
+            return true;
+        } catch (\Throwable $e) {
+            $error = $e->getMessage();
+            return false;
+        }
     }
 
     /**
@@ -173,10 +220,11 @@ ExternalIgnoreList      refile:{$openDkimBaseDir}/TrustedHosts
 InternalHosts           refile:{$openDkimBaseDir}/TrustedHosts
 EOF;
 
-        file_put_contents($confFile, $masterConf . "\n");
+        $dummyErr = '';
+        $this->safeWriteFile($confFile, $masterConf . "\n", $dummyErr);
 
         // Pastikan /etc/default/opendkim menggunakan socket port yang sama
-        @file_put_contents($defaultFile, "SOCKET=\"inet:12301@127.0.0.1\"\n");
+        $this->safeWriteFile($defaultFile, "SOCKET=\"inet:12301@127.0.0.1\"\n", $dummyErr);
         @mkdir('/run/opendkim', 0755, true);
         @exec('chown -R opendkim:opendkim /run/opendkim');
     }
