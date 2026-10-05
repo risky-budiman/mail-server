@@ -22,6 +22,16 @@ new class extends Component
     public $newPassword = '';
     public $showResetModal = false;
 
+    // State untuk Edit Account Modal
+    public $showEditModal = false;
+    public $editingUserId = null;
+    public $editUsername = '';
+    public $editDomainId = '';
+    public $editName = '';
+    public $editPassword = '';
+    public $editQuotaGb = 2;
+    public $editIsActive = true;
+
     public function openResetModal($userId)
     {
         $user = VirtualUser::findOrFail($userId);
@@ -56,6 +66,78 @@ new class extends Component
         $savedEmail = $user->email;
         $this->closeResetModal();
         session()->flash('message', "Password untuk akun {$savedEmail} berhasil diperbarui! Pengguna sekarang dapat login dengan password baru.");
+    }
+
+    public function editUser($userId)
+    {
+        $user = VirtualUser::findOrFail($userId);
+        $this->editingUserId = $user->id;
+
+        // Split username and domain
+        $parts = explode('@', $user->email);
+        $this->editUsername = $parts[0] ?? '';
+        $this->editDomainId = $user->domain_id;
+        $this->editName = $user->name ?? '';
+        $this->editPassword = '';
+        $this->editQuotaGb = round($user->quota_bytes / (1024 * 1024 * 1024), 1);
+        if ($this->editQuotaGb <= 0) $this->editQuotaGb = 2;
+        $this->editIsActive = (bool) $user->is_active;
+        $this->showEditModal = true;
+    }
+
+    public function closeEditModal()
+    {
+        $this->showEditModal = false;
+        $this->editingUserId = null;
+        $this->reset(['editUsername', 'editDomainId', 'editName', 'editPassword', 'editQuotaGb', 'editIsActive']);
+    }
+
+    public function updateUser()
+    {
+        $this->validate([
+            'editUsername' => 'required|string|regex:/^[a-zA-Z0-9._-]+$/',
+            'editDomainId' => 'required|exists:virtual_domains,id',
+            'editName' => 'nullable|string|max:100',
+            'editPassword' => 'nullable|string|min:6',
+            'editQuotaGb' => 'required|numeric|min:0.5|max:100',
+        ], [
+            'editUsername.regex' => 'Username hanya boleh huruf, angka, titik, atau strip.',
+            'editPassword.min' => 'Password minimal 6 karakter jika ingin diubah.',
+        ]);
+
+        $user = VirtualUser::findOrFail($this->editingUserId);
+        $domain = VirtualDomain::findOrFail($this->editDomainId);
+        $newEmail = strtolower(trim($this->editUsername)) . '@' . $domain->name;
+
+        // Cek duplikasi email pada user lain
+        $duplicate = VirtualUser::where('email', $newEmail)
+            ->where('id', '!=', $user->id)
+            ->exists();
+        if ($duplicate) {
+            $this->addError('editUsername', 'Alamat email ' . $newEmail . ' sudah digunakan oleh akun lain.');
+            return;
+        }
+
+        $quotaBytes = (int) ($this->editQuotaGb * 1024 * 1024 * 1024);
+        $maildir = $domain->name . '/' . strtolower(trim($this->editUsername)) . '/';
+
+        $updateData = [
+            'domain_id' => $domain->id,
+            'email' => $newEmail,
+            'name' => $this->editName ?: ucfirst(trim($this->editUsername)),
+            'quota_bytes' => $quotaBytes,
+            'maildir_path' => $maildir,
+            'is_active' => $this->editIsActive,
+        ];
+
+        if (!empty($this->editPassword)) {
+            $updateData['password'] = Hash::make($this->editPassword);
+        }
+
+        $user->update($updateData);
+
+        $this->closeEditModal();
+        session()->flash('message', "Data akun mailbox {$newEmail} berhasil diperbarui!");
     }
 
     public function mount()
@@ -296,6 +378,11 @@ new class extends Component
                             </td>
                             <td class="py-3 px-3 text-right">
                                 <div class="flex items-center justify-end gap-1">
+                                    <button wire:click="editUser({{ $user->id }})" 
+                                            title="Edit Akun Mailbox" 
+                                            class="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all cursor-pointer">
+                                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                    </button>
                                     <button wire:click="openResetModal({{ $user->id }})" 
                                             title="Reset Password Mailbox" 
                                             class="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-all cursor-pointer">
@@ -336,7 +423,7 @@ new class extends Component
                         <p class="text-[11px] text-slate-400 font-mono">{{ $resetUserEmail }}</p>
                     </div>
                 </div>
-                <button wire:click="closeResetModal" class="text-slate-400 hover:text-white transition-colors">
+                <button wire:click="closeResetModal" class="text-slate-400 hover:text-white transition-colors cursor-pointer">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -360,13 +447,96 @@ new class extends Component
 
                 <div class="flex items-center justify-end gap-2 pt-2">
                     <button type="button" wire:click="closeResetModal" 
-                            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all">
+                            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer">
                         Batal
                     </button>
                     <button type="submit" 
-                            class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5">
+                            class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs transition-all shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer">
                         <i data-lucide="check" class="w-4 h-4"></i>
                         <span>Simpan Password Baru</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
+
+    <!-- Modal Edit Akun Mailbox -->
+    @if($showEditModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+        <div class="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Edit Akun Mailbox</h3>
+                        <p class="text-[11px] text-slate-400 font-mono">{{ $editUsername }}</p>
+                    </div>
+                </div>
+                <button wire:click="closeEditModal" class="text-slate-400 hover:text-white transition-colors cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form wire:submit="updateUser" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Username & Domain</label>
+                    <div class="flex flex-col sm:flex-row rounded-lg overflow-hidden border border-slate-700 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                        <input type="text" wire:model="editUsername" placeholder="username" 
+                               class="w-full sm:w-1/2 px-3 py-2 bg-slate-950 text-xs text-white placeholder-slate-500 focus:outline-none border-b sm:border-b-0 sm:border-r border-slate-800">
+                        <div class="flex items-center w-full sm:w-1/2 bg-slate-900">
+                            <span class="px-2.5 py-2 text-slate-400 text-xs font-mono select-none">@</span>
+                            <select wire:model="editDomainId" class="w-full px-2 py-2 bg-slate-900 text-xs text-white focus:outline-none font-mono">
+                                @foreach($domains as $dom)
+                                    <option value="{{ $dom->id }}">{{ $dom->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    @error('editUsername') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                    @error('editDomainId') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Nama Tampilan (Display Name)</label>
+                    <input type="text" wire:model="editName" placeholder="contoh: Budi Santoso" 
+                           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                    @error('editName') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Ganti Password (Opsional)</label>
+                    <input type="password" wire:model="editPassword" placeholder="Biarkan kosong jika tidak ingin mengubah password" 
+                           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+                    <p class="text-[10px] text-slate-500 mt-1">Hanya isi kolom ini jika ingin memperbarui kata sandi akun.</p>
+                    @error('editPassword') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1">Alokasi Kuota Storage (GB)</label>
+                    <input type="number" step="0.5" wire:model="editQuotaGb" 
+                           class="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500">
+                    @error('editQuotaGb') <span class="text-rose-400 text-[10px] mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="edit_user_active" wire:model="editIsActive" class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                    <label for="edit_user_active" class="text-xs text-slate-300 cursor-pointer">Mailbox aktif (bisa login IMAP/SMTP)</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button type="button" wire:click="closeEditModal" 
+                            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer">
+                        Batal
+                    </button>
+                    <button type="submit" 
+                            class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center gap-1.5 cursor-pointer">
+                        <span wire:loading.remove wire:target="updateUser">
+                            <i data-lucide="check" class="w-4 h-4 inline mr-1"></i>Simpan Perubahan
+                        </span>
+                        <span wire:loading wire:target="updateUser">Menyimpan...</span>
                     </button>
                 </div>
             </form>
