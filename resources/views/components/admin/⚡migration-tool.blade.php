@@ -664,25 +664,29 @@ new class extends Component
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="md:col-span-2">
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">IMAP Hostname</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
+                        <div class="sm:col-span-6">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">IMAP Hostname</label>
                             <input type="text" wire:model="source_host" placeholder="imap.hostinger.com"
                                    class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono">
                             @error('source_host') <p class="text-[11px] text-rose-400 mt-1">{{ $message }}</p> @enderror
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Port & Enkripsi</label>
-                            <div class="flex gap-2">
-                                <input type="number" wire:model="source_port" placeholder="993"
-                                       class="w-20 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white font-mono text-center focus:outline-none focus:border-amber-500">
-                                <select wire:model="source_encryption" class="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500">
-                                    <option value="ssl">SSL / TLS (993)</option>
-                                    <option value="tls">STARTTLS (143)</option>
-                                    <option value="none">Tanpa Enkripsi</option>
-                                </select>
-                            </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Port</label>
+                            <input type="number" wire:model="source_port" placeholder="993"
+                                   class="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white font-mono text-center focus:outline-none focus:border-amber-500">
+                            @error('source_port') <p class="text-[11px] text-rose-400 mt-1">{{ $message }}</p> @enderror
+                        </div>
+
+                        <div class="sm:col-span-4">
+                            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Enkripsi</label>
+                            <select wire:model="source_encryption" class="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500">
+                                <option value="ssl">SSL / TLS (Port 993)</option>
+                                <option value="tls">STARTTLS (Port 143)</option>
+                                <option value="none">Tanpa Enkripsi (143)</option>
+                            </select>
+                            @error('source_encryption') <p class="text-[11px] text-rose-400 mt-1">{{ $message }}</p> @enderror
                         </div>
                     </div>
 

@@ -102,9 +102,14 @@ new class extends Component
         try {
             \Illuminate\Support\Facades\Artisan::call('mail:sync-dkim');
             $this->detectDkimPublicKey();
-            session()->flash('sync_msg', 'Berhasil! Kunci DKIM, SigningTable, KeyTable, dan TrustedHosts telah disinkronkan untuk semua domain.');
+            session()->flash('sync_msg', 'Berhasil! Kunci DKIM, SigningTable, KeyTable, dan TrustedHosts telah diproses untuk semua domain.');
         } catch (\Throwable $e) {
-            session()->flash('sync_err', 'Gagal sinkronisasi: ' . $e->getMessage());
+            $msg = $e->getMessage();
+            if (str_contains($msg, 'Permission denied') || str_contains($msg, 'Read-only file system')) {
+                session()->flash('sync_err', 'Web server (PHP-FPM) dibatasi oleh keamanan OS dari menulis file sistem /etc/opendkim. Silakan jalankan perintah ini 1x di terminal root VPS: php artisan mail:sync-dkim');
+            } else {
+                session()->flash('sync_err', 'Gagal sinkronisasi: ' . $msg);
+            }
         }
     }
 
