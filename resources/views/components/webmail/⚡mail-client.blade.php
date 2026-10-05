@@ -1966,7 +1966,7 @@ new class extends Component
                                 $size = $isObject ? ($att['size'] ?? '1 MB') : '1.2 MB';
                                 $ext = $isObject ? ($att['ext'] ?? pathinfo($name, PATHINFO_EXTENSION)) : pathinfo($name, PATHINFO_EXTENSION);
                                 $extLower = strtolower($ext ?: 'dat');
-                                $fileUrl = $isObject ? ($att['url'] ?? ($att['path'] ? asset('storage/' . $att['path']) : null)) : null;
+                                $fileUrl = $isObject ? ($att['url'] ?? (!empty($att['path']) ? asset('storage/' . $att['path']) : null)) : null;
                                 $isImage = in_array($extLower, ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']);
                                 $isPdf = ($extLower === 'pdf');
                             @endphp

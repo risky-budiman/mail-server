@@ -24,23 +24,33 @@
 
     @livewireScripts
     <script>
-        window.refreshIcons = function() {
-            if (window.lucide && typeof window.lucide.createIcons === 'function') {
-                window.lucide.createIcons();
-            }
-        };
+        (function() {
+            let isRefreshing = false;
+            let refreshTimer = null;
+            window.refreshIcons = function() {
+                if (isRefreshing) return;
+                if (refreshTimer) clearTimeout(refreshTimer);
+                refreshTimer = setTimeout(() => {
+                    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                        isRefreshing = true;
+                        window.lucide.createIcons();
+                        requestAnimationFrame(() => { isRefreshing = false; });
+                    }
+                }, 50);
+            };
 
-        document.addEventListener('DOMContentLoaded', window.refreshIcons);
-        document.addEventListener('livewire:navigated', window.refreshIcons);
-        document.addEventListener('livewire:init', () => {
-            window.refreshIcons();
-            if (typeof Livewire !== 'undefined' && Livewire.hook) {
-                Livewire.hook('commit', ({ succeed }) => succeed(() => queueMicrotask(() => window.refreshIcons())));
-            }
-        });
+            document.addEventListener('DOMContentLoaded', window.refreshIcons);
+            document.addEventListener('livewire:navigated', window.refreshIcons);
+            document.addEventListener('livewire:init', () => {
+                window.refreshIcons();
+                if (typeof Livewire !== 'undefined' && Livewire.hook) {
+                    Livewire.hook('commit', ({ succeed }) => succeed(() => queueMicrotask(() => window.refreshIcons())));
+                }
+            });
 
-        const lucideObserver = new MutationObserver(() => window.refreshIcons());
-        lucideObserver.observe(document.body, { childList: true, subtree: true });
+            const lucideObserver = new MutationObserver(() => { if (!isRefreshing) window.refreshIcons(); });
+            lucideObserver.observe(document.body, { childList: true, subtree: true });
+        })();
     </script>
 </body>
 </html>
