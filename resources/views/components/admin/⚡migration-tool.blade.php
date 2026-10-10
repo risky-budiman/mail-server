@@ -27,13 +27,15 @@ new class extends Component
     public $target_user_id = '';
     public $sync_inbox = true;
     public $sync_sent = true;
+    public $sync_custom = true;
     public $sync_drafts = false;
     public $sync_trash = false;
+    public $sync_limit = 250;
     public $mark_read = false;
 
     // Form Field File Upload
     public $backup_files = [];
-    public $target_folder = 'INBOX';
+    public $target_folder = 'auto'; // 'auto', 'INBOX', 'Sent', 'Archive', 'Drafts', 'Trash'
 
     // Status state
     public $isProcessing = false;
@@ -87,6 +89,84 @@ new class extends Component
         return $clean;
     }
 
+    /**
+     * Ambil seluruh folder secara flat (tanpa terpotong hirarki IMAP %)
+     */
+    protected function getAllFoldersFlat($client): array
+    {
+        try {
+            // false = non-hierarchical (menggunakan pola * untuk mengambil semua folder & subfolder)
+            $folders = $client->getFolders(false);
+            $flat = [];
+            $this->flattenFolders($folders, $flat);
+            return $flat;
+        } catch (\Throwable $e) {
+            $folders = $client->getFolders(true);
+            $flat = [];
+            $this->flattenFolders($folders, $flat);
+            return $flat;
+        }
+    }
+
+    protected function flattenFolders($folders, array &$result): void
+    {
+        if (empty($folders)) return;
+        foreach ($folders as $folder) {
+            $result[] = $folder;
+            if (!empty($folder->children) && count($folder->children) > 0) {
+                $this->flattenFolders($folder->children, $result);
+            }
+        }
+    }
+
+    /**
+     * Deteksi tipe folder remote (Inbox, Sent, Drafts, Trash, atau Folder Kustom)
+     */
+    protected function determineTargetFolder($folder): array
+    {
+        $name = trim($folder->name ?? '');
+        $path = trim($folder->path ?? ($folder->full_name ?? $name));
+
+        // Bersihkan prefix umum seperti [Gmail]/, INBOX., INBOX/
+        $cleanPath = trim(preg_replace('/^(INBOX[\.\/]|\[Gmail\][\.\/])/i', '', $path));
+        $cleanName = trim(preg_replace('/^(INBOX[\.\/]|\[Gmail\][\.\/])/i', '', $name));
+        $check = strtolower($path . ' ' . $name);
+
+        // 1. Sent / Terkirim
+        if (str_contains($check, 'sent') || str_contains($check, 'terkirim')) {
+            return ['type' => 'sent', 'db_folder' => 'sent', 'sync_prop' => 'sync_sent', 'label' => 'Sent'];
+        }
+
+        // 2. Drafts / Draf / Konsep
+        if (str_contains($check, 'draft') || str_contains($check, 'draf') || str_contains($check, 'konsep')) {
+            return ['type' => 'drafts', 'db_folder' => 'drafts', 'sync_prop' => 'sync_drafts', 'label' => 'Drafts'];
+        }
+
+        // 3. Trash / Sampah / Bin / Deleted
+        if (str_contains($check, 'trash') || str_contains($check, 'sampah') || str_contains($check, 'bin') || str_contains($check, 'deleted')) {
+            return ['type' => 'trash', 'db_folder' => 'trash', 'sync_prop' => 'sync_trash', 'label' => 'Trash'];
+        }
+
+        // 4. Spam / Junk
+        if (str_contains($check, 'spam') || str_contains($check, 'junk')) {
+            return ['type' => 'trash', 'db_folder' => 'trash', 'sync_prop' => 'sync_trash', 'label' => 'Spam'];
+        }
+
+        // 5. Inbox (Hanya jika benar-benar Inbox tanpa subfolder)
+        if (strcasecmp($path, 'INBOX') === 0 || strcasecmp($name, 'INBOX') === 0 || empty($cleanPath)) {
+            return ['type' => 'inbox', 'db_folder' => 'inbox', 'sync_prop' => 'sync_inbox', 'label' => 'Inbox'];
+        }
+
+        // 6. Folder Kustom / Lainnya (Arsip, Klien, Tagihan, dll.)
+        $customLabel = $cleanName ?: ($cleanPath ?: 'Folder Kustom');
+        return [
+            'type' => 'custom',
+            'db_folder' => $customLabel,
+            'sync_prop' => 'sync_custom',
+            'label' => $customLabel,
+        ];
+    }
+
     public function testConnection()
     {
         $this->validate([
@@ -111,14 +191,17 @@ new class extends Component
             ]);
 
             $client->connect();
-            $folders = $client->getFolders();
-            $folderNames = [];
+            $folders = $this->getAllFoldersFlat($client);
+            $folderLabels = [];
             foreach ($folders as $folder) {
-                $folderNames[] = $folder->name;
+                if (!empty($folder->no_select)) continue;
+                $folderInfo = $this->determineTargetFolder($folder);
+                $displayName = $folder->name ?: ($folder->path ?? 'Folder');
+                $folderLabels[] = $displayName . ' (' . ucfirst($folderInfo['type']) . ')';
             }
 
             $this->connectionStatus = 'success';
-            $this->connectionMessage = 'Koneksi Berhasil! Terhubung ke server IMAP ' . $this->source_host . '. Ditemukan ' . count($folderNames) . ' folder: ' . implode(', ', array_slice($folderNames, 0, 5)) . (count($folderNames) > 5 ? '...' : '');
+            $this->connectionMessage = 'Koneksi Berhasil! Terhubung ke server IMAP ' . $this->source_host . '. Ditemukan ' . count($folderLabels) . ' folder aktif: ' . implode(', ', array_slice($folderLabels, 0, 8)) . (count($folderLabels) > 8 ? '...' : '');
         } catch (\Throwable $e) {
             $this->connectionStatus = 'error';
             $this->connectionMessage = 'Gagal terhubung: ' . $e->getMessage() . '. Pastikan email, password, dan port 993 SSL sudah tepat.';
@@ -154,37 +237,47 @@ new class extends Component
             ]);
 
             $client->connect();
-            $folders = $client->getFolders();
+            $folders = $this->getAllFoldersFlat($client);
 
-            $foldersToSync = [];
-            if ($this->sync_inbox) $foldersToSync[] = 'INBOX';
-            if ($this->sync_sent) $foldersToSync[] = 'Sent';
-            if ($this->sync_drafts) $foldersToSync[] = 'Drafts';
-            if ($this->sync_trash) $foldersToSync[] = 'Trash';
+            $this->addLog("Terhubung ke server IMAP. Ditemukan " . count($folders) . " folder.", 'info');
 
             $totalMigrated = 0;
             $maildirBase = '/var/vmail/' . ($targetUser->maildir_path ?: ($targetUser->domain->name . '/' . explode('@', $targetUser->email)[0] . '/'));
 
             foreach ($folders as $folder) {
-                $fName = $folder->name;
-                $matched = false;
-                foreach ($foldersToSync as $targetSync) {
-                    if (stripos($fName, $targetSync) !== false || $fName === $targetSync) {
-                        $matched = true;
-                        break;
-                    }
-                }
-
-                if (!$matched && !empty($foldersToSync)) {
+                if (!empty($folder->no_select)) {
                     continue;
                 }
 
-                $this->addLog("Memeriksa folder [{$fName}]...", 'info');
+                $fName = $folder->name ?: ($folder->path ?? 'Folder');
+                $folderInfo = $this->determineTargetFolder($folder);
+                $syncProp = $folderInfo['sync_prop'];
+
+                if (!empty($syncProp) && isset($this->{$syncProp}) && !$this->{$syncProp}) {
+                    $this->addLog("Folder [{$fName}] dilewati (opsi {$folderInfo['label']} tidak dicentang).", 'info');
+                    continue;
+                }
+
+                $targetDbFolder = $folderInfo['db_folder'];
+
+                // Jika folder kustom, otomatis buatkan foldernya di Webmail agar muncul di menu samping
+                if ($folderInfo['type'] === 'custom') {
+                    MailboxFolder::firstOrCreate([
+                        'virtual_user_id' => $targetUser->id,
+                        'name' => $targetDbFolder,
+                    ]);
+                }
+
+                $this->addLog("Memeriksa folder remote [{$fName}] -> Webmail [{$targetDbFolder}]...", 'info');
                 
                 try {
-                    $messages = $folder->query()->all()->limit(100)->get();
+                    $query = $folder->query()->all();
+                    if ($this->sync_limit > 0) {
+                        $query->limit((int) $this->sync_limit);
+                    }
+                    $messages = $query->get();
                     $msgCount = $messages->count();
-                    $this->addLog("Ditemukan {$msgCount} pesan di folder [{$fName}]. Menyalin ke Mailbox Webmail & Storage...", 'info');
+                    $this->addLog("Ditemukan {$msgCount} pesan di folder [{$fName}]. Menyalin ke Webmail...", 'info');
 
                     foreach ($messages as $idx => $msg) {
                         $this->stats['total']++;
@@ -193,13 +286,13 @@ new class extends Component
                             $size = strlen($rawContent);
                             $this->stats['bytes'] += $size;
 
-                            $fromName = 'Pengirim Hostinger';
-                            $fromEmail = 'unknown@hostinger.com';
+                            $fromName = 'Pengirim';
+                            $fromEmail = 'unknown@domain.com';
                             try {
                                 $fromList = $msg->getFrom();
                                 if (!empty($fromList) && isset($fromList[0])) {
-                                    $fromName = $fromList[0]->personal ?? ($fromList[0]->mail ?? 'Pengirim Hostinger');
-                                    $fromEmail = $fromList[0]->mail ?? 'unknown@hostinger.com';
+                                    $fromName = $this->decodeMimeHeader($fromList[0]->personal ?? '') ?: ($fromList[0]->mail ?? 'Pengirim');
+                                    $fromEmail = $fromList[0]->mail ?? 'unknown@domain.com';
                                 }
                             } catch (\Throwable $e) {}
 
@@ -213,7 +306,8 @@ new class extends Component
 
                             $subject = '(Tanpa Subjek)';
                             try {
-                                $subject = (string) $msg->getSubject() ?: '(Tanpa Subjek)';
+                                $rawSubj = (string) $msg->getSubject();
+                                $subject = $this->decodeMimeHeader($rawSubj) ?: '(Tanpa Subjek)';
                             } catch (\Throwable $e) {}
 
                             // Format Date dengan aman dari Webklex Attribute / Carbon / String
@@ -252,15 +346,6 @@ new class extends Component
                                 $isStarred = $msg->hasFlag('Flagged');
                             } catch (\Throwable $e) {}
 
-                            $targetDbFolder = 'inbox';
-                            if (stripos($fName, 'sent') !== false) {
-                                $targetDbFolder = 'sent';
-                            } elseif (stripos($fName, 'draft') !== false) {
-                                $targetDbFolder = 'drafts';
-                            } elseif (stripos($fName, 'trash') !== false) {
-                                $targetDbFolder = 'trash';
-                            }
-
                             // Ekstrak & Simpan File Lampiran Fisik (PDF, Docx, xlsx, dll)
                             $attachmentsData = [];
                             try {
@@ -275,11 +360,9 @@ new class extends Component
                                         $attContent = $attachment->getContent();
                                         $fileSize = strlen($attContent);
                                         
-                                        // Buat nama file penyimpanan aman
                                         $safeFileName = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $attName);
                                         @file_put_contents($attDir . '/' . $safeFileName, $attContent);
 
-                                        // Hitung ukuran terbaca
                                         $formattedSize = $fileSize > 1048576 ? round($fileSize / 1048576, 1) . ' MB' : max(1, round($fileSize / 1024)) . ' KB';
                                         $ext = strtolower(pathinfo($attName, PATHINFO_EXTENSION)) ?: 'file';
 
@@ -294,7 +377,7 @@ new class extends Component
                                 }
                             } catch (\Throwable $e) {}
 
-                            // 1. Cek Apakah Email Sudah Ada Sebelumnya (Mencegah Duplikasi / Duplikat Pesan)
+                            // 1. Cek Apakah Email Sudah Ada Sebelumnya (Mencegah Duplikasi)
                             $existingEmail = MailboxEmail::where('virtual_user_id', $targetUser->id)
                                 ->where('folder', $targetDbFolder)
                                 ->where('subject', $subject)
@@ -303,7 +386,6 @@ new class extends Component
                                 ->first();
 
                             if ($existingEmail) {
-                                // Update jika ada lampiran file baru atau perubahan status
                                 $existingEmail->update([
                                     'from_name'   => $fromName,
                                     'body'        => $body,
@@ -312,7 +394,6 @@ new class extends Component
                                     'is_starred'  => $isStarred,
                                 ]);
                             } else {
-                                // Simpan sebagai email baru
                                 MailboxEmail::create([
                                     'virtual_user_id' => $targetUser->id,
                                     'folder'          => $targetDbFolder,
@@ -331,7 +412,18 @@ new class extends Component
 
                             // 2. Jika di lingkungan VPS Linux, tulis langsung ke Maildir Dovecot
                             if (is_dir('/var/vmail')) {
-                                $folderSubdir = ($fName === 'INBOX') ? 'cur' : ('.' . $fName . '/cur');
+                                if ($targetDbFolder === 'inbox') {
+                                    $folderSubdir = 'cur';
+                                } elseif ($targetDbFolder === 'sent') {
+                                    $folderSubdir = '.Sent/cur';
+                                } elseif ($targetDbFolder === 'drafts') {
+                                    $folderSubdir = '.Drafts/cur';
+                                } elseif ($targetDbFolder === 'trash') {
+                                    $folderSubdir = '.Trash/cur';
+                                } else {
+                                    $cleanSub = preg_replace('/[^a-zA-Z0-9_-]/', '_', $targetDbFolder);
+                                    $folderSubdir = '.' . $cleanSub . '/cur';
+                                }
                                 $targetDir = rtrim($maildirBase, '/') . '/' . $folderSubdir;
                                 if (!file_exists($targetDir)) {
                                     @mkdir($targetDir, 0770, true);
@@ -348,7 +440,7 @@ new class extends Component
                         }
                     }
                 } catch (\Throwable $fErr) {
-                    $this->addLog("Folder {$fName} dilewati: {$fErr->getMessage()}", 'warning');
+                    $this->addLog("Folder [{$fName}] dilewati: {$fErr->getMessage()}", 'warning');
                 }
             }
 
@@ -358,82 +450,79 @@ new class extends Component
 
             $this->addLog("✅ Migrasi IMAP Selesai! Berhasil memindahkan {$this->stats['success']} pesan ke akun {$targetUser->email}.", 'success');
         } catch (\Throwable $e) {
-            // Jika koneksi remote gagal (misal di localhost tanpa koneksi internet ke Hostinger)
-            $this->addLog("Catatan: Server belum dapat menjangkau server remote ({$e->getMessage()}).", 'warning');
-            $this->addLog("Menjalankan migrasi contoh (Simulated Migration) agar email langsung masuk ke Webmail Anda...", 'info');
-            
-            // Masukkan data riwayat email Hostinger asli ke database akun tujuan
-            $sampleEmails = [
-                [
-                    'folder' => 'inbox',
-                    'from_name' => 'Hostinger Support & Billing',
-                    'from_email' => 'support@hostinger.com',
-                    'subject' => 'Konfirmasi Faktur Pembayaran & Layanan Email Hostinger #HST-88910',
-                    'date_human' => '20 Sep 14:20',
-                    'body' => '<p>Halo Pelanggan Hostinger,</p><p>Terima kasih telah menggunakan layanan email kami. Berikut rincian arsip faktur dan data mailbox Anda sebelum dipindahkan ke mail server mandiri.</p><p>Salam hangat,<br><strong>Hostinger Billing Team</strong></p>',
-                    'is_read' => true,
-                    'is_starred' => true,
-                ],
-                [
-                    'folder' => 'inbox',
-                    'from_name' => 'PT Mitra Solusi Bisnis',
-                    'from_email' => 'finance@mitrasolusi.co.id',
-                    'subject' => 'Re: Pengajuan Kerjasama Pengadaan Sistem & Penawaran Harga Q4',
-                    'date_human' => '19 Sep 10:15',
-                    'body' => '<p>Selamat pagi,</p><p>Kami telah meninjau proposal yang Anda kirimkan minggu lalu via webmail Hostinger. Draft kontrak kerjasama terlampir sudah kami setujui bersama tim direksi.</p><p>Silakan hubungi kami kembali untuk jadwal tanda tangan.</p>',
-                    'is_read' => false,
-                    'is_starred' => false,
-                ],
-                [
-                    'folder' => 'inbox',
-                    'from_name' => 'Google Search Console',
-                    'from_email' => 'sc-noreply@google.com',
-                    'subject' => 'Laporan Kinerja Bulanan Situs & Peningkatan Keterlihatan Web',
-                    'date_human' => '18 Sep 08:00',
-                    'body' => '<p>Hai Webmaster,</p><p>Performa pencarian situs web Anda mengalami peningkatan klik organik sebesar +18.4% selama periode bulan ini. Klik tautan berikut untuk membuka dasbor analitik lengkap.</p>',
-                    'is_read' => true,
-                    'is_starred' => false,
-                ],
-                [
-                    'folder' => 'sent',
-                    'from_name' => $targetUser->name ?: 'Admin',
-                    'from_email' => $targetUser->email,
-                    'subject' => 'Penawaran Kerjasama Pengadaan Infrastruktur & Mail Server',
-                    'date_human' => '17 Sep 16:45',
-                    'body' => '<p>Yth. Tim Mitra Solusi,</p><p>Bersama email ini kami lampirkan dokumen penawaran harga dan spesifikasi teknis untuk layanan server mandiri berkinerja tinggi.</p><p>Hormat kami,<br>' . e($targetUser->name ?: 'Administrator') . '</p>',
-                    'is_read' => true,
-                    'is_starred' => true,
-                ],
-            ];
-
-            foreach ($sampleEmails as $mail) {
-                MailboxEmail::create([
-                    'virtual_user_id' => $targetUser->id,
-                    'folder'          => $mail['folder'],
-                    'from_name'       => $mail['from_name'],
-                    'from_email'      => $mail['from_email'],
-                    'to'              => $targetUser->email,
-                    'subject'         => $mail['subject'],
-                    'date_human'      => $mail['date_human'],
-                    'is_read'         => $mail['is_read'],
-                    'is_starred'      => $mail['is_starred'],
-                    'body'            => $mail['body'],
-                    'attachments'     => [],
-                    'spam_score'      => 0.0,
-                ]);
-                $this->stats['total']++;
-                $this->stats['success']++;
-                $this->stats['bytes'] += 1024 * 65;
-            }
-
-            $targetUser->used_bytes += $this->stats['bytes'];
-            $targetUser->save();
-
-            $this->addLog("✅ Berhasil memindahkan " . count($sampleEmails) . " email historis ke Webmail akun {$targetUser->email} (Folder Inbox & Sent).", 'success');
-            $this->addLog("Sekarang buka menu 'Webmail Inbox' untuk melihat email yang baru saja dipindahkan!", 'success');
+            $this->addLog("Gagal terhubung ke remote server IMAP: {$e->getMessage()}", 'error');
+            $this->addLog("Pastikan alamat server, port 993, email, dan password sudah benar.", 'warning');
         } finally {
             $this->isProcessing = false;
         }
+    }
+
+    /**
+     * Parse data email dari file .eml mentah
+     */
+    protected function parseEmlData(string $rawContent, VirtualUser $targetUser, string $fallbackFolder = 'inbox'): array
+    {
+        $subject = '(Tanpa Subjek)';
+        if (preg_match('/^Subject:\s*(.+)$/mi', $rawContent, $m)) {
+            $subject = $this->decodeMimeHeader(trim($m[1])) ?: '(Tanpa Subjek)';
+        }
+
+        $fromName = 'Pengirim';
+        $fromEmail = 'unknown@' . $targetUser->domain->name;
+        if (preg_match('/^From:\s*(.+)$/mi', $rawContent, $m)) {
+            $rawFrom = trim($m[1]);
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawFrom, $fm)) {
+                $fromName = $this->decodeMimeHeader(trim($fm[1])) ?: $fm[2];
+                $fromEmail = trim($fm[2]);
+            } else {
+                $fromEmail = trim($rawFrom);
+                $fromName = $fromEmail;
+            }
+        }
+
+        $toEmail = $targetUser->email;
+        if (preg_match('/^To:\s*(.+)$/mi', $rawContent, $m)) {
+            $rawTo = trim($m[1]);
+            if (preg_match('/<([^>]+)>/', $rawTo, $tm)) {
+                $toEmail = trim($tm[1]);
+            } else {
+                $toEmail = trim($rawTo);
+            }
+        }
+
+        $dateHuman = now()->format('d M H:i');
+        if (preg_match('/^Date:\s*(.+)$/mi', $rawContent, $m)) {
+            try {
+                $dateHuman = Carbon::parse(trim($m[1]))->format('d M H:i');
+            } catch (\Throwable $e) {}
+        }
+
+        $folder = $fallbackFolder;
+        if ($fallbackFolder === 'auto') {
+            if (strcasecmp($fromEmail, $targetUser->email) === 0) {
+                $folder = 'sent';
+            } else {
+                $folder = 'inbox';
+            }
+        }
+
+        $body = '';
+        $parts = preg_split("/\r?\n\r?\n/", $rawContent, 2);
+        if (isset($parts[1])) {
+            $body = nl2br(e(substr(strip_tags($parts[1]), 0, 4000)));
+        } else {
+            $body = nl2br(e(substr($rawContent, 0, 4000)));
+        }
+
+        return [
+            'folder'     => $folder,
+            'from_name'  => $fromName,
+            'from_email' => $fromEmail,
+            'to'         => $toEmail,
+            'subject'    => $subject,
+            'date_human' => $dateHuman,
+            'body'       => $body,
+        ];
     }
 
     public function startFileImport()
@@ -451,7 +540,6 @@ new class extends Component
         $this->addLog("Memulai impor " . count($this->backup_files) . " file email ke {$targetUser->email}...", 'info');
 
         $maildirBase = '/var/vmail/' . ($targetUser->maildir_path ?: ($targetUser->domain->name . '/' . explode('@', $targetUser->email)[0] . '/'));
-        $targetDir = rtrim($maildirBase, '/') . '/' . ($this->target_folder === 'INBOX' ? 'cur' : ('.' . $this->target_folder . '/cur'));
 
         foreach ($this->backup_files as $file) {
             try {
@@ -461,24 +549,27 @@ new class extends Component
                 $this->stats['bytes'] += $size;
 
                 if ($ext === 'eml' || $ext === 'txt') {
-                    // Simpan ke database MailboxEmail agar tampil di webmail
-                    $subject = 'Arsip Email Impor: ' . pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+                    $emlData = $this->parseEmlData($rawContent, $targetUser, strtolower($this->target_folder));
+                    $targetDbFolder = $emlData['folder'];
+
                     MailboxEmail::create([
                         'virtual_user_id' => $targetUser->id,
-                        'folder'          => strtolower($this->target_folder),
-                        'from_name'       => 'Backup Importer',
-                        'from_email'      => 'backup@' . $targetUser->domain->name,
-                        'to'              => $targetUser->email,
-                        'subject'         => $subject,
-                        'date_human'      => now()->format('d M H:i'),
+                        'folder'          => $targetDbFolder,
+                        'from_name'       => $emlData['from_name'],
+                        'from_email'      => $emlData['from_email'],
+                        'to'              => $emlData['to'],
+                        'subject'         => $emlData['subject'],
+                        'date_human'      => $emlData['date_human'],
                         'is_read'         => true,
                         'is_starred'      => false,
-                        'body'            => nl2br(e(substr($rawContent, 0, 4000))),
+                        'body'            => $emlData['body'],
                         'attachments'     => [],
                         'spam_score'      => 0.0,
                     ]);
 
                     if (is_dir('/var/vmail')) {
+                        $folderSubdir = ($targetDbFolder === 'inbox') ? 'cur' : ('.' . ucfirst($targetDbFolder) . '/cur');
+                        $targetDir = rtrim($maildirBase, '/') . '/' . $folderSubdir;
                         if (!file_exists($targetDir)) {
                             @mkdir($targetDir, 0770, true);
                         }
@@ -486,7 +577,7 @@ new class extends Component
                         @file_put_contents($targetDir . '/' . $msgFilename, $rawContent);
                     }
                     $this->stats['success']++;
-                    $this->addLog("Import [{$file->getClientOriginalName()}] (" . round($size / 1024, 1) . " KB) berhasil dimasukkan ke Webmail.", 'success');
+                    $this->addLog("Import [{$file->getClientOriginalName()}] -> [{$targetDbFolder}] berhasil.", 'success');
                 } elseif ($ext === 'zip') {
                     $zip = new \ZipArchive;
                     if ($zip->open($file->getRealPath()) === TRUE) {
@@ -498,22 +589,51 @@ new class extends Component
                                 if ($stream) {
                                     $emlContent = stream_get_contents($stream);
                                     
+                                    // Deteksi folder dari struktur direktori dalam ZIP
+                                    $dirPart = dirname($filename);
+                                    $folderForZip = strtolower($this->target_folder);
+                                    if ($folderForZip === 'auto') {
+                                        if ($dirPart !== '.' && !empty($dirPart)) {
+                                            $cleanDir = basename(str_replace('\\', '/', $dirPart));
+                                            if (stripos($cleanDir, 'sent') !== false) {
+                                                $folderForZip = 'sent';
+                                            } elseif (stripos($cleanDir, 'draft') !== false) {
+                                                $folderForZip = 'drafts';
+                                            } elseif (stripos($cleanDir, 'trash') !== false) {
+                                                $folderForZip = 'trash';
+                                            } elseif (stripos($cleanDir, 'inbox') !== false) {
+                                                $folderForZip = 'inbox';
+                                            } else {
+                                                $folderForZip = $cleanDir;
+                                                MailboxFolder::firstOrCreate([
+                                                    'virtual_user_id' => $targetUser->id,
+                                                    'name' => $cleanDir,
+                                                ]);
+                                            }
+                                        }
+                                    }
+
+                                    $emlData = $this->parseEmlData($emlContent, $targetUser, $folderForZip);
+                                    $finalFolder = $emlData['folder'];
+
                                     MailboxEmail::create([
                                         'virtual_user_id' => $targetUser->id,
-                                        'folder'          => strtolower($this->target_folder),
-                                        'from_name'       => 'Arsip ZIP Importer',
-                                        'from_email'      => 'archive@' . $targetUser->domain->name,
-                                        'to'              => $targetUser->email,
-                                        'subject'         => 'Pesan Arsip: ' . basename($filename),
-                                        'date_human'      => now()->format('d M H:i'),
+                                        'folder'          => $finalFolder,
+                                        'from_name'       => $emlData['from_name'],
+                                        'from_email'      => $emlData['from_email'],
+                                        'to'              => $emlData['to'],
+                                        'subject'         => $emlData['subject'],
+                                        'date_human'      => $emlData['date_human'],
                                         'is_read'         => true,
                                         'is_starred'      => false,
-                                        'body'            => nl2br(e(substr($emlContent, 0, 4000))),
+                                        'body'            => $emlData['body'],
                                         'attachments'     => [],
                                         'spam_score'      => 0.0,
                                     ]);
 
                                     if (is_dir('/var/vmail')) {
+                                        $folderSubdir = ($finalFolder === 'inbox') ? 'cur' : ('.' . ucfirst($finalFolder) . '/cur');
+                                        $targetDir = rtrim($maildirBase, '/') . '/' . $folderSubdir;
                                         if (!file_exists($targetDir)) {
                                             @mkdir($targetDir, 0770, true);
                                         }
@@ -720,16 +840,26 @@ new class extends Component
                     </div>
 
                     <!-- Pilihan Folder -->
-                    <div>
-                        <label class="block text-xs font-medium text-slate-300 mb-2">Folder yang Ingin Disinkronkan:</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div class="space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                            <label class="block text-xs font-semibold text-slate-300">Folder yang Ingin Disinkronkan:</label>
+                            <span class="text-[11px] text-amber-400 font-medium flex items-center gap-1">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                                Otomatis mendeteksi Sent, Subfolder & Folder Kustom
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                             <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
                                 <input type="checkbox" wire:model="sync_inbox" class="rounded border-slate-700 text-amber-500 focus:ring-amber-500/20 bg-slate-900">
                                 <span>📥 Kotak Masuk</span>
                             </label>
                             <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
                                 <input type="checkbox" wire:model="sync_sent" class="rounded border-slate-700 text-amber-500 focus:ring-amber-500/20 bg-slate-900">
-                                <span>📤 Terkirim</span>
+                                <span>📤 Terkirim (Sent)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
+                                <input type="checkbox" wire:model="sync_custom" class="rounded border-slate-700 text-amber-500 focus:ring-amber-500/20 bg-slate-900">
+                                <span>📂 Folder Lain / Kustom</span>
                             </label>
                             <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 cursor-pointer hover:border-slate-700">
                                 <input type="checkbox" wire:model="sync_drafts" class="rounded border-slate-700 text-amber-500 focus:ring-amber-500/20 bg-slate-900">
@@ -739,6 +869,17 @@ new class extends Component
                                 <input type="checkbox" wire:model="sync_trash" class="rounded border-slate-700 text-amber-500 focus:ring-amber-500/20 bg-slate-900">
                                 <span>🗑️ Sampah</span>
                             </label>
+                        </div>
+
+                        <div class="pt-1">
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Maksimal Pesan Yang Ditarik Per Folder:</label>
+                            <select wire:model="sync_limit" class="w-full sm:w-72 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-amber-500">
+                                <option value="100">100 Pesan per folder (Cepat)</option>
+                                <option value="250">250 Pesan per folder (Disarankan)</option>
+                                <option value="500">500 Pesan per folder (Lengkap)</option>
+                                <option value="1000">1.000 Pesan per folder</option>
+                                <option value="0">Semua Pesan (Tanpa Batas)</option>
+                            </select>
                         </div>
                     </div>
 
@@ -815,12 +956,16 @@ new class extends Component
                     </div>
 
                     <div>
-                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Masukkan ke Folder</label>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Masukkan ke Folder</label>
                         <select wire:model="target_folder" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500">
+                            <option value="auto">⚡ Otomatis (Deteksi Folder & Subfolder dari File / ZIP)</option>
                             <option value="INBOX">Inbox (Kotak Masuk)</option>
+                            <option value="Sent">Sent (Pesan Terkirim)</option>
                             <option value="Archive">Archive (Arsip)</option>
-                            <option value="Sent">Sent (Terkirim)</option>
+                            <option value="Drafts">Drafts (Draf)</option>
+                            <option value="Trash">Trash (Sampah)</option>
                         </select>
+                        <p class="text-[11px] text-slate-500 mt-1">Mode <strong>Otomatis</strong> akan memilah email masuk ke Inbox, email keluar ke Sent, serta mempertahankan nama folder kustom dari struktur ZIP/Thunderbird.</p>
                     </div>
 
                     <!-- Dropzone Area -->
