@@ -216,8 +216,32 @@ ufw allow 80/tcp    # HTTP (Web Portal / Let's Encrypt)
 ufw allow 443/tcp   # HTTPS (Web Portal)
 
 echo "======================================================"
+echo " 9. Optimasi Upload PHP-FPM & Hak Akses Storage Webmail"
+echo "======================================================"
+# Naikkan batas upload_max_filesize dan post_max_size di seluruh versi PHP-FPM
+for PHP_INI in /etc/php/*/fpm/php.ini; do
+    if [ -f "$PHP_INI" ]; then
+        echo ">>> Menyesuaikan batas upload di: $PHP_INI"
+        sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 100M/' "$PHP_INI"
+        sed -i 's/^post_max_size\s*=.*/post_max_size = 100M/' "$PHP_INI"
+        sed -i 's/^memory_limit\s*=.*/memory_limit = 256M/' "$PHP_INI"
+    fi
+done
+
+# Pastikan folder upload Livewire & attachments berizin www-data
+if [ -d "/var/www/mailids" ]; then
+    mkdir -p /var/www/mailids/storage/app/private/livewire-tmp
+    mkdir -p /var/www/mailids/storage/app/livewire-tmp
+    mkdir -p /var/www/mailids/storage/app/public/attachments
+    chown -R www-data:www-data /var/www/mailids/storage /var/www/mailids/bootstrap/cache
+    chmod -R 775 /var/www/mailids/storage /var/www/mailids/bootstrap/cache
+fi
+
+echo "======================================================"
 echo " Selesai! Mengaktifkan & Menjalankan Semua Layanan:"
 echo "======================================================"
 systemctl restart postfix dovecot opendkim
 systemctl enable postfix dovecot opendkim
-echo " Mail Engine (Postfix + Dovecot + OpenDKIM) Telah Aktif!"
+systemctl restart php*-fpm 2>/dev/null || true
+echo " Mail Engine & Webmail Storage Telah Siap Digunakan!"
+

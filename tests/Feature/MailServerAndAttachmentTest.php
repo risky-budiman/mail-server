@@ -113,4 +113,38 @@ class MailServerAndAttachmentTest extends TestCase
             'subject' => 'Pertanyaan Layanan Melalui Alias',
         ]);
     }
+
+    public function test_livewire_upload_various_attachment_formats()
+    {
+        $domain = VirtualDomain::create(['name' => 'perusahaan.co.id', 'is_active' => true]);
+        $user = VirtualUser::create([
+            'domain_id' => $domain->id,
+            'email' => 'admin@perusahaan.co.id',
+            'password' => bcrypt('secret123'),
+            'maildir_path' => 'perusahaan.co.id/admin/',
+            'quota_bytes' => 1073741824,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user, 'mailbox');
+
+        $pdfFile = \Illuminate\Http\UploadedFile::fake()->create('dokumen.pdf', 500, 'application/pdf');
+        $zipFile = \Illuminate\Http\UploadedFile::fake()->create('arsip.zip', 1000, 'application/zip');
+        $xlsxFile = \Illuminate\Http\UploadedFile::fake()->create('laporan.xlsx', 300, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        \Livewire\Livewire::test('webmail.mail-client')
+            ->set('composeTo', 'target@example.com')
+            ->set('composeSubject', 'Lampiran Multi Format')
+            ->set('composeBody', 'Berikut terlampir dokumen.')
+            ->set('attachments', [$pdfFile, $zipFile, $xlsxFile])
+            ->call('sendEmail')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('mailbox_emails', [
+            'virtual_user_id' => $user->id,
+            'folder' => 'sent',
+            'subject' => 'Lampiran Multi Format',
+        ]);
+    }
 }
+

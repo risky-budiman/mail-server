@@ -19,6 +19,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Pastikan folder penampung upload sementara Livewire dan folder lampiran selalu siap & writable
+        $uploadDirs = [
+            storage_path('app/private/livewire-tmp'),
+            storage_path('app/livewire-tmp'),
+            storage_path('app/public/attachments'),
+        ];
+
+        foreach ($uploadDirs as $dir) {
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+        }
     }
 }
+

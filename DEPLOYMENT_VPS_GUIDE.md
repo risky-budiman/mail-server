@@ -514,20 +514,34 @@ Di Postfix, tabel `virtual_alias_maps` dievaluasi **sebelum** `virtual_mailbox_m
 3. **Pengiriman Email Menggunakan Identitas Alias:**
    Di Webmail Client, dropdown **"Kirim Sebagai (From Address)"** akan otomatis muncul jika mailbox Anda memiliki alias resmi. Anda dapat memilih mengirim atas nama alias atau akun utama secara bebas.
 
-#### B. Pengaturan Lampiran File Dokumen (Attachments)
-MailIDS mendukung pratinjau interaktif dan unduhan riil untuk berbagai dokumen (PDF, Office, Zip, Gambar, teks):
-1. **Hak Akses Folder Penyimpanan Lampiran:**
-   Pastikan folder `storage/app/public/attachments` dapat ditulis oleh web server:
-   ```bash
-   sudo mkdir -p /var/www/mailids/storage/app/public/attachments
-   sudo chown -R www-data:www-data /var/www/mailids/storage/app/public/attachments
-   sudo chmod -R 775 /var/www/mailids/storage/app/public/attachments
-   php artisan storage:link
-   ```
-2. **Pratinjau Langsung & Pengunduhan:**
-   - **File PDF & Gambar (JPG, PNG, WebP, SVG):** Pratinjau langsung interaktif di dalam modal pop-up tanpa perlu keluar halaman.
-   - **File Dokumen Office & Arsip (DOCX, XLSX, ZIP):** Dilengkapi tombol unduh langsung dengan header resmi RFC 6266 `Content-Disposition: attachment`.
-   - **Ukuran Maksimum Upload:** Diatur di `/etc/php/8.3/fpm/php.ini` (`upload_max_filesize = 50M` dan `post_max_size = 50M`).
+#### B. Pengaturan Lampiran File Dokumen (Attachments) & Solusi "The attachments failed to upload"
+MailIDS mendukung pratinjau interaktif dan unduhan riil untuk berbagai dokumen (PDF, Office DOCX/XLSX/PPTX, Zip, RAR, Gambar, teks tanpa terkecuali hingga 100 MB).
+
+Jika muncul error **"The attachments failed to upload"**, penyebab utamanya adalah batas bawaan PHP-FPM Ubuntu (`upload_max_filesize` bawaan hanya 2 MB) atau direktori sementara Livewire (`livewire-tmp`) belum memiliki izin tulis untuk `www-data`. Jalankan perintah perbaikan cepat berikut di terminal VPS:
+
+```bash
+# 1. Buat direktori penyimpanan upload Livewire & attachments serta berikan hak akses www-data
+sudo mkdir -p /var/www/mailids/storage/app/private/livewire-tmp
+sudo mkdir -p /var/www/mailids/storage/app/livewire-tmp
+sudo mkdir -p /var/www/mailids/storage/app/public/attachments
+sudo chown -R www-data:www-data /var/www/mailids/storage /var/www/mailids/bootstrap/cache
+sudo chmod -R 775 /var/www/mailids/storage /var/www/mailids/bootstrap/cache
+
+# 2. Naikkan batas upload di PHP-FPM (upload_max_filesize & post_max_size ke 100M)
+sudo sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 100M/' /etc/php/8.3/fpm/php.ini
+sudo sed -i 's/^post_max_size\s*=.*/post_max_size = 100M/' /etc/php/8.3/fpm/php.ini
+sudo sed -i 's/^memory_limit\s*=.*/memory_limit = 256M/' /etc/php/8.3/fpm/php.ini
+
+# 3. Pastikan batas body size di Nginx diset ke 100M
+# (Pastikan "client_max_body_size 100M;" ada di /etc/nginx/sites-available/mailids.conf)
+
+# 4. Bersihkan cache aplikasi & restart PHP-FPM dan Nginx
+cd /var/www/mailids
+php artisan optimize:clear
+php artisan storage:link
+sudo systemctl restart php8.3-fpm nginx
+```
 
 ---
 *Dokumentasi ini 100% mutakhir dan selaras dengan seluruh modul MailIDS yang aktif.*
+
