@@ -410,8 +410,8 @@ new class extends Component
                                 ]);
                             }
 
-                            // 2. Jika di lingkungan VPS Linux, tulis langsung ke Maildir Dovecot
-                            if (is_dir('/var/vmail')) {
+                            // 2. Jika di lingkungan VPS Linux, tulis langsung ke Maildir Dovecot (hanya jika email baru)
+                            if (is_dir('/var/vmail') && !$existingEmail) {
                                 if ($targetDbFolder === 'inbox') {
                                     $folderSubdir = 'cur';
                                 } elseif ($targetDbFolder === 'sent') {
@@ -552,30 +552,45 @@ new class extends Component
                     $emlData = $this->parseEmlData($rawContent, $targetUser, strtolower($this->target_folder));
                     $targetDbFolder = $emlData['folder'];
 
-                    MailboxEmail::create([
-                        'virtual_user_id' => $targetUser->id,
-                        'folder'          => $targetDbFolder,
-                        'from_name'       => $emlData['from_name'],
-                        'from_email'      => $emlData['from_email'],
-                        'to'              => $emlData['to'],
-                        'subject'         => $emlData['subject'],
-                        'date_human'      => $emlData['date_human'],
-                        'is_read'         => true,
-                        'is_starred'      => false,
-                        'body'            => $emlData['body'],
-                        'attachments'     => [],
-                        'spam_score'      => 0.0,
-                    ]);
+                    $existingEml = MailboxEmail::where('virtual_user_id', $targetUser->id)
+                        ->where('folder', $targetDbFolder)
+                        ->where('subject', $emlData['subject'])
+                        ->where('from_email', $emlData['from_email'])
+                        ->where('date_human', $emlData['date_human'])
+                        ->first();
 
-                    if (is_dir('/var/vmail')) {
-                        $folderSubdir = ($targetDbFolder === 'inbox') ? 'cur' : ('.' . ucfirst($targetDbFolder) . '/cur');
-                        $targetDir = rtrim($maildirBase, '/') . '/' . $folderSubdir;
-                        if (!file_exists($targetDir)) {
-                            @mkdir($targetDir, 0770, true);
+                    if ($existingEml) {
+                        $existingEml->update([
+                            'from_name'   => $emlData['from_name'],
+                            'body'        => $emlData['body'],
+                        ]);
+                    } else {
+                        MailboxEmail::create([
+                            'virtual_user_id' => $targetUser->id,
+                            'folder'          => $targetDbFolder,
+                            'from_name'       => $emlData['from_name'],
+                            'from_email'      => $emlData['from_email'],
+                            'to'              => $emlData['to'],
+                            'subject'         => $emlData['subject'],
+                            'date_human'      => $emlData['date_human'],
+                            'is_read'         => true,
+                            'is_starred'      => false,
+                            'body'            => $emlData['body'],
+                            'attachments'     => [],
+                            'spam_score'      => 0.0,
+                        ]);
+
+                        if (is_dir('/var/vmail')) {
+                            $folderSubdir = ($targetDbFolder === 'inbox') ? 'cur' : ('.' . ucfirst($targetDbFolder) . '/cur');
+                            $targetDir = rtrim($maildirBase, '/') . '/' . $folderSubdir;
+                            if (!file_exists($targetDir)) {
+                                @mkdir($targetDir, 0770, true);
+                            }
+                            $msgFilename = time() . '.' . uniqid('import_') . ':2,S';
+                            @file_put_contents($targetDir . '/' . $msgFilename, $rawContent);
                         }
-                        $msgFilename = time() . '.' . uniqid('import_') . ':2,S';
-                        @file_put_contents($targetDir . '/' . $msgFilename, $rawContent);
                     }
+
                     $this->stats['success']++;
                     $this->addLog("Import [{$file->getClientOriginalName()}] -> [{$targetDbFolder}] berhasil.", 'success');
                 } elseif ($ext === 'zip') {
