@@ -38,23 +38,16 @@ echo "=================================================================="
 echo " 2. Menormalkan Konfigurasi Nginx (Bersih & Bebas Batas)"
 echo "=================================================================="
 
-# Bersihkan duplikat baris client_max_body_size jika ada
-if [ -f /etc/nginx/nginx.conf ]; then
-    sed -i '/client_max_body_size/d' /etc/nginx/nginx.conf 2>/dev/null || true
-fi
+# Bersihkan seluruh duplikat baris client_max_body_size dari semua file konfigurasi Nginx
+sed -i '/client_max_body_size/d' /etc/nginx/nginx.conf 2>/dev/null || true
+sed -i '/client_max_body_size/d' /etc/nginx/sites-available/* 2>/dev/null || true
+sed -i '/client_max_body_size/d' /etc/nginx/sites-enabled/* 2>/dev/null || true
 
-for SITE_FILE in /etc/nginx/sites-available/*; do
-    if [ -f "$SITE_FILE" ]; then
-        sed -i '/client_max_body_size/d' "$SITE_FILE" 2>/dev/null || true
-        # Tambahkan 1 baris bersih di server block
-        sed -i '/server {/a \    client_max_body_size 0;' "$SITE_FILE" 2>/dev/null || true
-    fi
-done
-
-# Buat file konfigurasi terpisah resmi Nginx untuk batas upload tanpa merusak nginx.conf
+# Gunakan SATU konfigurasi resmi terpusat di /etc/nginx/conf.d/upload_limits.conf (berlaku global tanpa duplikat)
 mkdir -p /etc/nginx/conf.d
 echo "client_max_body_size 0;" > /etc/nginx/conf.d/upload_limits.conf
-echo "--> Konfigurasi Nginx upload_limits.conf diset ke 0 (unlimited)."
+echo "--> Konfigurasi Nginx upload_limits.conf diset ke 0 (unlimited global)."
+
 
 # Uji sintaks Nginx
 echo "--> Menguji sintaks Nginx:"
