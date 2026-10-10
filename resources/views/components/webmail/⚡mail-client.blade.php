@@ -3143,8 +3143,10 @@ new class extends Component
                                 }
                             },
                             get suggestions() {
-                                if (!this.inputVal || this.inputVal.length < 1) return [];
-                                let q = this.inputVal.toLowerCase();
+                                let q = (this.inputVal || '').trim().toLowerCase();
+                                if (!q) {
+                                    return allContacts.filter(c => !this.chips.includes(c.email)).slice(0, 6);
+                                }
                                 return allContacts.filter(c => 
                                     (c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))) &&
                                     !this.chips.includes(c.email)
@@ -3153,7 +3155,7 @@ new class extends Component
                         }">
                             <label class="block text-xs font-bold text-slate-300 mb-1">Kepada (To)</label>
                             <div class="relative flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/90 border border-slate-700/80 rounded-xl focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner cursor-text"
-                                 @click="$refs.toInput && $refs.toInput.focus()">
+                                 @click="$refs.toInput && $refs.toInput.focus(); showSug = true;">
                                 
                                 <!-- Chips Penerima -->
                                 <template x-for="(chip, idx) in chips" :key="idx">
@@ -3173,6 +3175,7 @@ new class extends Component
                                 <input type="text"
                                        x-ref="toInput"
                                        x-model="inputVal"
+                                       @input="showSug = true"
                                        @keydown="handleKeyDown($event)"
                                        @paste="handlePaste($event)"
                                        @blur="setTimeout(() => { addChip(); showSug = false; }, 200)"
@@ -3278,8 +3281,10 @@ new class extends Component
                                 }
                             },
                             get suggestions() {
-                                if (!this.inputVal || this.inputVal.length < 1) return [];
-                                let q = this.inputVal.toLowerCase();
+                                let q = (this.inputVal || '').trim().toLowerCase();
+                                if (!q) {
+                                    return allContacts.filter(c => !this.chips.includes(c.email)).slice(0, 6);
+                                }
                                 return allContacts.filter(c => 
                                     (c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))) &&
                                     !this.chips.includes(c.email)
@@ -3293,7 +3298,7 @@ new class extends Component
                                 </button>
                             </div>
                             <div class="relative flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/90 border border-slate-700/80 rounded-xl focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner cursor-text"
-                                 @click="$refs.ccInput && $refs.ccInput.focus()">
+                                 @click="$refs.ccInput && $refs.ccInput.focus(); showSug = true;">
                                 
                                 <template x-for="(chip, idx) in chips" :key="idx">
                                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-cyan-500/30 text-cyan-200 text-xs shadow-sm font-medium">
@@ -3311,6 +3316,7 @@ new class extends Component
                                 <input type="text"
                                        x-ref="ccInput"
                                        x-model="inputVal"
+                                       @input="showSug = true"
                                        @keydown="handleKeyDown($event)"
                                        @paste="handlePaste($event)"
                                        @blur="setTimeout(() => { addChip(); showSug = false; }, 200)"
@@ -3407,8 +3413,10 @@ new class extends Component
                                 }
                             },
                             get suggestions() {
-                                if (!this.inputVal || this.inputVal.length < 1) return [];
-                                let q = this.inputVal.toLowerCase();
+                                let q = (this.inputVal || '').trim().toLowerCase();
+                                if (!q) {
+                                    return allContacts.filter(c => !this.chips.includes(c.email)).slice(0, 6);
+                                }
                                 return allContacts.filter(c => 
                                     (c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))) &&
                                     !this.chips.includes(c.email)
@@ -3422,7 +3430,7 @@ new class extends Component
                                 </button>
                             </div>
                             <div class="relative flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/90 border border-slate-700/80 rounded-xl focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner cursor-text"
-                                 @click="$refs.bccInput && $refs.bccInput.focus()">
+                                 @click="$refs.bccInput && $refs.bccInput.focus(); showSug = true;">
                                 
                                 <template x-for="(chip, idx) in chips" :key="idx">
                                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-cyan-500/30 text-cyan-200 text-xs shadow-sm font-medium">
@@ -3440,6 +3448,7 @@ new class extends Component
                                 <input type="text"
                                        x-ref="bccInput"
                                        x-model="inputVal"
+                                       @input="showSug = true"
                                        @keydown="handleKeyDown($event)"
                                        @paste="handlePaste($event)"
                                        @blur="setTimeout(() => { addChip(); showSug = false; }, 200)"
