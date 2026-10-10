@@ -418,7 +418,7 @@ new class extends Component
                                     $body = (string) $msg->getHTMLBody();
                                 } else {
                                     $textBody = (string) $msg->getTextBody();
-                                    $body = !empty($textBody) ? nl2br(e($textBody)) : $this->cleanRawBodyContent($rawContent);
+                                    $body = !empty($textBody) ? $textBody : $this->cleanRawBodyContent($rawContent);
                                 }
                             } catch (\Throwable $e) {
                                 $body = $this->cleanRawBodyContent($rawContent);
@@ -579,11 +579,11 @@ new class extends Component
                 if (stripos($partHeader, 'text/plain') !== false && empty($bestBody)) {
                     if (stripos($partHeader, 'base64') !== false) {
                         $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody));
-                        if ($decoded) $bestBody = nl2br(e($decoded));
+                        if ($decoded) $bestBody = $decoded;
                     } elseif (stripos($partHeader, 'quoted-printable') !== false) {
-                        $bestBody = nl2br(e(quoted_printable_decode($partBody)));
+                        $bestBody = quoted_printable_decode($partBody);
                     } else {
-                        $bestBody = nl2br(e($partBody));
+                        $bestBody = $partBody;
                     }
                 }
             }
@@ -592,12 +592,12 @@ new class extends Component
 
         if (stripos($raw, 'Content-Transfer-Encoding: base64') !== false) {
             $decoded = @base64_decode(preg_replace('/\s+/', '', $body));
-            if ($decoded) return nl2br(e($decoded));
+            if ($decoded) return $decoded;
         } elseif (stripos($raw, 'Content-Transfer-Encoding: quoted-printable') !== false) {
             return quoted_printable_decode($body);
         }
 
-        return nl2br(e(substr(strip_tags($body), 0, 8000)));
+        return substr(strip_tags($body), 0, 8000);
     }
 
     /**

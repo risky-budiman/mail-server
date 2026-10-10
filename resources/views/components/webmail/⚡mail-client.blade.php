@@ -1696,23 +1696,71 @@ new class extends Component
         session()->flash('webmail_msg', $flashMessage);
     }
 
+    /**
+     * Deteksi apakah email dikirimkan via alias milik pengguna (bukan dikirim langsung ke alamat utama).
+     */
+    public function getDetectedAliasRecipient(?array $email): ?string
+    {
+        if (empty($email) || empty($email['to']) || empty($this->currentAccount)) {
+            return null;
+        }
+
+        $userEmail = strtolower(trim($this->currentAccount->email));
+
+        // Ekstrak semua alamat email valid dari field 'to' dan 'cc'
+        $rawRecipients = ($email['to'] ?? '') . ' ' . ($email['cc'] ?? '');
+        preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $rawRecipients, $matches);
+        $foundEmails = array_map('strtolower', array_unique($matches[0] ?? []));
+
+        // Jika alamat email utama akun pengguna ditemukan di daftar penerima,
+        // maka email ini BUKAN via alias (dikirimkan langsung ke kotak masuk utama pengguna).
+        if (in_array($userEmail, $foundEmails, true)) {
+            return null;
+        }
+
+        // Cek apakah ada penerima yang cocok dengan salah satu alias aktif pengguna
+        if (!empty($this->availableAliases) && is_array($this->availableAliases)) {
+            foreach ($foundEmails as $fe) {
+                foreach ($this->availableAliases as $alias) {
+                    if (strtolower(trim($alias)) === $fe) {
+                        return $fe;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Bersihkan dan poles konten HTML email agar tampil rapi, aman, dan berkelas profesional.
+     */
     public function cleanEmailHtml(?string $rawHtml): string
     {
         if (empty($rawHtml)) return '';
 
-        // Jika bukan HTML, kembalikan teks dengan line breaks
-        if (!preg_match('/<[a-z][\s\S]*>/i', $rawHtml)) {
-            return nl2br(e($rawHtml));
-        }
-
         $html = $rawHtml;
 
-        // 1. Ekstrak konten dalam <body> jika ada tag <body>
+        // 1. Decode quoted-printable jika terdeteksi (mis. =3D atau =20 atau =\r?\n)
+        if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $html)) {
+            $html = quoted_printable_decode($html);
+        }
+
+        // 2. Hapus komentar UID internal dan boundary yang bocor
+        $html = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $html);
+        $html = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $html);
+
+        // Jika murni teks biasa tanpa tag HTML, delegasikan ke formatter teks
+        if (!preg_match('/<[a-z][\s\S]*>/i', $html)) {
+            return $this->formatPlainTextEmailBody($html);
+        }
+
+        // 3. Ekstrak konten dalam <body> jika ada tag <body>
         if (preg_match('/<body[^>]*>(.*?)<\/body>/is', $html, $matches)) {
             $html = $matches[1];
         }
 
-        // 2. Hapus komentar Office/Word <!--[if ...]><![endif]--> dan <xml> tags
+        // 4. Hapus komentar Office/Word <!--[if ...]><![endif]--> dan tag XML
         $html = preg_replace('/<!--\[if\s+gte\s+mso[\s\S]*?<!\[endif\]-->/is', '', $html);
         $html = preg_replace('/<xml[\s\S]*?<\/xml>/is', '', $html);
         $html = preg_replace('/<\/?o:[a-z0-9_-]+[^>]*>/is', '', $html);
@@ -1720,16 +1768,87 @@ new class extends Component
         $html = preg_replace('/<\/?m:[a-z0-9_-]+[^>]*>/is', '', $html);
         $html = preg_replace('/<\/?v:[a-z0-9_-]+[^>]*>/is', '', $html);
 
-        // 3. Hapus tag <script> atau <style> bawaan yang bisa merusak styling antarmuka webmail
+        // 5. Hapus script berbahaya, link eksternal yang merusak css, dan meta
         $html = preg_replace('#<script\b[^>]*>(.*?)<\/script>#is', '', $html);
-        $html = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', '', $html);
         $html = preg_replace('#<link\b[^>]*>#is', '', $html);
         $html = preg_replace('#<meta\b[^>]*>#is', '', $html);
 
-        // 4. Sanitasi atribut on* (onclick, onload, dll)
+        // 6. Sanitasi atribut event JavaScript on* (onclick, onload, onerror, dll)
         $html = preg_replace('#\son[a-zA-Z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#is', '', $html);
 
+        // 7. Amankan tautan agar membuka di tab baru dan aman dari reverse tabnabbing
+        $html = preg_replace_callback('/<a\b([^>]*)>/i', function ($m) {
+            $attrs = $m[1];
+            if (!stripos($attrs, 'target=')) {
+                $attrs .= ' target="_blank"';
+            }
+            if (!stripos($attrs, 'rel=')) {
+                $attrs .= ' rel="noopener noreferrer"';
+            }
+            return '<a ' . trim($attrs) . '>';
+        }, $html);
+
+        // 8. Pastikan gambar tidak meluap dari kontainer (responsif)
+        $html = preg_replace_callback('/<img\b([^>]*)>/i', function ($m) {
+            $attrs = $m[1];
+            if (!stripos($attrs, 'loading=')) {
+                $attrs .= ' loading="lazy"';
+            }
+            return '<img ' . trim($attrs) . ' style="max-width: 100% !important; height: auto !important; display: inline-block;">';
+        }, $html);
+
         return trim($html);
+    }
+
+    /**
+     * Format email teks biasa agar tampil rapi, modern, dengan autolink dan styling kutipan balasan.
+     */
+    public function formatPlainTextEmailBody(?string $text): string
+    {
+        if (empty($text)) return '';
+
+        $clean = $text;
+
+        // 1. Bersihkan komentar UID internal dan boundary
+        $clean = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $clean);
+        $clean = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $clean);
+
+        // 2. Decode quoted-printable jika terdeteksi
+        if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $clean)) {
+            $clean = quoted_printable_decode($clean);
+        }
+
+        $lines = explode("\n", str_replace("\r\n", "\n", trim($clean)));
+        $formattedLines = [];
+
+        foreach ($lines as $line) {
+            $trimmedLine = trim($line);
+
+            // Kutipan balasan email (dimulai dengan > atau &gt;)
+            if (str_starts_with($trimmedLine, '>') || str_starts_with($trimmedLine, '&gt;')) {
+                $quoteContent = ltrim(ltrim($trimmedLine, '>'), '&gt; ');
+                $escapedQuote = e($quoteContent);
+                $linkedQuote = preg_replace(
+                    '!(https?://[^\s<>"\'\)]+)!i',
+                    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline break-all font-medium">$1</a>',
+                    $escapedQuote
+                );
+                $formattedLines[] = '<div class="border-l-2 border-indigo-500/40 pl-3.5 py-0.5 text-slate-400 italic text-xs sm:text-sm font-sans leading-relaxed">' . $linkedQuote . '</div>';
+                continue;
+            }
+
+            // Baris normal: Escape HTML lalu autolink URL
+            $escaped = e($line);
+            $linked = preg_replace(
+                '!(https?://[^\s<>"\'\)]+)!i',
+                '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:text-cyan-300 underline font-medium break-all">$1</a>',
+                $escaped
+            );
+
+            $formattedLines[] = '<div class="min-h-[1.25rem] leading-relaxed">' . ($linked !== '' ? $linked : '&nbsp;') . '</div>';
+        }
+
+        return implode("\n", $formattedLines);
     }
 
     /**
@@ -2800,10 +2919,13 @@ new class extends Component
                             <div class="flex items-center gap-1.5 text-xs text-slate-400">
                                 <button @click="showHeaderDetails = !showHeaderDetails" class="hover:text-slate-200 flex items-center gap-1.5 font-medium transition-colors">
                                     <span>to me</span>
-                                    @if(!empty($selectedEmail['to']) && $selectedEmail['to'] !== ($currentAccount->email ?? ''))
-                                        <span class="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-medium flex items-center gap-1" title="Diterima via alias alamat email: {{ $selectedEmail['to'] }}">
+                                    @php
+                                        $detectedAlias = $this->getDetectedAliasRecipient($selectedEmail);
+                                    @endphp
+                                    @if($detectedAlias)
+                                        <span class="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-medium flex items-center gap-1" title="Diterima via alias alamat email: {{ $detectedAlias }}">
                                             <i data-lucide="split" class="w-2.5 h-2.5"></i>
-                                            <span>via alias: {{ $selectedEmail['to'] }}</span>
+                                            <span>via alias: {{ $detectedAlias }}</span>
                                         </span>
                                     @endif
                                     <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
@@ -2814,6 +2936,9 @@ new class extends Component
                             <div x-show="showHeaderDetails" x-collapse class="mt-2 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 space-y-1" style="display: none;">
                                 <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] ?: (!empty($selectedEmail['from_email']) ? $selectedEmail['from_email'] : '-') }}@if(!empty($selectedEmail['from_email']) && !empty($selectedEmail['from_name'])) &lt;{{ $selectedEmail['from_email'] }}&gt;@endif</span></div>
                                 <div><span class="text-slate-500">To:</span> <span class="text-slate-200">{{ $selectedEmail['to'] }}</span></div>
+                                @if(!empty($detectedAlias))
+                                    <div><span class="text-slate-500">Delivered-To:</span> <span class="text-cyan-400 font-mono">{{ $detectedAlias }} (Alias)</span></div>
+                                @endif
                                 <div><span class="text-slate-500">Date:</span> <span class="text-slate-200">{{ $selectedEmail['date'] }}</span></div>
                                 <div><span class="text-slate-500">Security:</span> <span class="text-emerald-400">Standard TLS Encryption (Postfix/Dovecot)</span></div>
                             </div>
@@ -2999,7 +3124,7 @@ new class extends Component
                                     </div>
 
                                     <div class="text-xs text-slate-300 line-clamp-2 pl-8 font-sans leading-relaxed opacity-85">
-                                        {{ strip_tags($tMsg['body']) }}
+                                        {{ $this->getCleanSnippet($tMsg['body'], 140) }}
                                     </div>
                                 </div>
                                 @endif
@@ -3008,19 +3133,62 @@ new class extends Component
                     </div>
                     @endif
 
-                    <!-- Active Email Body Content (HTML & Plain Text Support) -->
-                    <div class="py-2 text-slate-200">
-                        @if (preg_match('/<[a-z][\s\S]*>/i', $selectedEmail['body']))
-                            {{-- Email Berformat Rich HTML (Tampilan Kertas Dokumen Modern Bersih) --}}
-                            <div class="rounded-2xl p-6 sm:p-8 bg-slate-900/90 border border-slate-800 text-slate-200 leading-relaxed font-sans shadow-lg overflow-x-auto selection:bg-indigo-500 selection:text-white email-rendered-content">
-                                {!! $this->cleanEmailHtml($selectedEmail['body']) !!}
+                    @php
+                        $isRichHtml = (bool) preg_match('/<(?:html|body|div|p|table|tbody|tr|td|span|img|h[1-6]|ul|ol|li|section|article)\b/i', $selectedEmail['body']);
+                    @endphp
+
+                    <!-- Active Email Body Content (Hostinger & Gmail Premium Reading Experience) -->
+                    <div class="py-2" x-data="{ readingMode: '{{ $isRichHtml ? 'paper' : 'dark' }}' }">
+                        <!-- Top Canvas Toolbar: Reading Mode Switcher & Format Indicator -->
+                        <div class="flex items-center justify-between pb-3 text-xs text-slate-400">
+                            <div class="flex items-center gap-2">
+                                @if($isRichHtml)
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px] font-medium">
+                                        <i data-lucide="layout" class="w-3 h-3 text-indigo-400"></i>
+                                        <span>Format Email HTML</span>
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[11px] font-medium">
+                                        <i data-lucide="file-text" class="w-3 h-3 text-slate-400"></i>
+                                        <span>Format Teks Polos</span>
+                                    </span>
+                                @endif
                             </div>
-                        @else
-                            {{-- Email Berformat Plain Text --}}
-                            <div class="rounded-2xl p-6 sm:p-8 bg-slate-900/60 border border-slate-800 text-sm sm:text-base text-slate-200 leading-relaxed font-sans whitespace-pre-line shadow-sm">
-                                {{ $selectedEmail['body'] }}
+
+                            <!-- Reading Mode Switcher (Kertas Terang Asli vs Mode Gelap) -->
+                            <div class="flex items-center bg-slate-900 border border-slate-800 rounded-full p-0.5 shadow-sm">
+                                <button type="button" 
+                                        @click="readingMode = 'paper'"
+                                        :class="readingMode === 'paper' ? 'bg-white text-slate-900 shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-3 py-1 rounded-full text-[11px] flex items-center gap-1.5 transition-all">
+                                    <i data-lucide="sun" class="w-3 h-3"></i>
+                                    <span>Kertas Asli</span>
+                                </button>
+                                <button type="button" 
+                                        @click="readingMode = 'dark'"
+                                        :class="readingMode === 'dark' ? 'bg-indigo-600 text-white shadow-sm font-semibold' : 'text-slate-400 hover:text-slate-200'"
+                                        class="px-3 py-1 rounded-full text-[11px] flex items-center gap-1.5 transition-all">
+                                    <i data-lucide="moon" class="w-3 h-3"></i>
+                                    <span>Gelap</span>
+                                </button>
                             </div>
-                        @endif
+                        </div>
+
+                        <!-- Canvas Box (Berubah warna & gaya sesuai readingMode) -->
+                        <div :class="readingMode === 'paper' ? 'email-paper-canvas' : 'email-dark-canvas'" 
+                             class="transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
+                            @if ($isRichHtml)
+                                {{-- Email Berformat Rich HTML Bersih --}}
+                                <div class="email-rendered-content overflow-x-auto">
+                                    {!! $this->cleanEmailHtml($selectedEmail['body']) !!}
+                                </div>
+                            @else
+                                {{-- Email Berformat Plain Text Rapi dengan Autolink & Quotes --}}
+                                <div class="font-sans text-sm sm:text-base leading-relaxed overflow-x-auto whitespace-pre-wrap">
+                                    {!! $this->formatPlainTextEmailBody($selectedEmail['body']) !!}
+                                </div>
+                            @endif
+                        </div>
                     </div>
 
                     <!-- Space filler so content never overlaps with sticky footer -->

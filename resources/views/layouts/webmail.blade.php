@@ -13,41 +13,79 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
     <style>
-        .email-rendered-content {
+        /* Email Rendered Canvas Styles (Gmail & Hostinger Webmail Standard) */
+        .email-paper-canvas {
+            background-color: #ffffff;
+            color: #1e293b;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.15);
+            padding: 1.75rem 2rem;
+            min-height: 280px;
+            overflow-x: auto;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .email-paper-canvas a {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+        .email-paper-canvas a:hover {
+            color: #1d4ed8;
+        }
+
+        .email-dark-canvas {
+            background-color: #0b132b;
             color: #e2e8f0;
-            font-size: 0.925rem;
-            line-height: 1.65;
+            border-radius: 1rem;
+            border: 1px solid #1e293b;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            padding: 1.75rem 2rem;
+            min-height: 280px;
+            overflow-x: auto;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .email-dark-canvas a {
+            color: #38bdf8;
+            text-decoration: underline;
+        }
+        .email-dark-canvas a:hover {
+            color: #7dd3fc;
+        }
+
+        .email-rendered-content {
+            width: 100%;
         }
         .email-rendered-content p {
             margin-bottom: 0.75rem;
         }
-        .email-rendered-content a {
-            color: #38bdf8;
-            text-decoration: underline;
-        }
-        .email-rendered-content a:hover {
-            color: #7dd3fc;
+        .email-rendered-content img {
+            max-width: 100% !important;
+            height: auto !important;
+            display: inline-block;
         }
         .email-rendered-content table {
             max-width: 100%;
-            border-collapse: collapse;
-            margin: 1rem 0;
         }
-        .email-rendered-content td, .email-rendered-content th {
+        /* Hanya beri border pada table data bertanda khusus, JANGAN merusak layout tables */
+        .email-rendered-content table[border="1"] td,
+        .email-rendered-content table.data-table td {
+            border: 1px solid #cbd5e1;
             padding: 0.5rem 0.75rem;
-            border: 1px solid #334155;
         }
-        .email-rendered-content img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 0.5rem;
-        }
-        .email-rendered-content b, .email-rendered-content strong {
-            color: #ffffff;
+        .email-dark-canvas .email-rendered-content table[border="1"] td,
+        .email-dark-canvas .email-rendered-content table.data-table td {
+            border-color: #334155;
         }
         .email-rendered-content hr {
-            border-color: #334155;
+            border: 0;
+            border-top: 1px solid #e2e8f0;
             margin: 1.5rem 0;
+        }
+        .email-dark-canvas .email-rendered-content hr {
+            border-top-color: #334155;
         }
     </style>
 </head>
