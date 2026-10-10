@@ -444,6 +444,22 @@ new class extends Component
                 ]);
             }
         }
+
+        // 3. Bersihkan duplikasi disclaimer / paragraf berulang pada email milik user ini jika ada
+        $duplicateBodyEmails = MailboxEmail::where('virtual_user_id', $user->id)
+            ->where(function($q) {
+                $q->where('body', 'like', '%DISCLAIMER:%DISCLAIMER:%')
+                  ->orWhere('body', 'like', '%PERHATIAN:%PERHATIAN:%');
+            })
+            ->take(50)
+            ->get();
+
+        foreach ($duplicateBodyEmails as $dupEm) {
+            $deduped = preg_replace('/(\b[^\r\n<>]{40,}\b)(?:\s*(?:<[^>]+>|\r?\n|\s)+\1)+/is', '$1', $dupEm->body);
+            if ($deduped !== $dupEm->body) {
+                $dupEm->update(['body' => $deduped]);
+            }
+        }
     }
 
     protected function loadAvailableAliases(?VirtualUser $user)
@@ -1750,8 +1766,11 @@ new class extends Component
         $html = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $html);
         $html = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $html);
 
+        // 2.5 Hapus duplikasi blok disclaimer atau paragraf identik berurutan akibat penggabungan multipart
+        $html = preg_replace('/(\b[^\r\n<>]{40,}\b)(?:\s*(?:<[^>]+>|\r?\n|\s)+\1)+/is', '$1', $html);
+
         // Jika murni teks biasa tanpa tag HTML, delegasikan ke formatter teks
-        if (!preg_match('/<[a-z][\s\S]*>/i', $html)) {
+        if (!preg_match('/<(?:html|body|div|p|table|tbody|tr|td|span|img|h[1-6]|ul|ol|li)\b/i', $html)) {
             return $this->formatPlainTextEmailBody($html);
         }
 
@@ -1818,11 +1837,21 @@ new class extends Component
             $clean = quoted_printable_decode($clean);
         }
 
+        // 2.5 Hapus duplikasi blok disclaimer atau paragraf identik berurutan
+        $clean = preg_replace('/(\b[^\r\n]{40,}\b)(?:\s*[\r\n]+\s*\1)+/is', '$1', $clean);
+
         $lines = explode("\n", str_replace("\r\n", "\n", trim($clean)));
         $formattedLines = [];
 
         foreach ($lines as $line) {
             $trimmedLine = trim($line);
+
+            // Deteksi baris Disclaimer korporat
+            if (preg_match('/^(?:DISCLAIMER|PERHATIAN|CONFIDENTIALITY NOTICE|PEMBERITAHUAN KERAHASIAAN):/i', $trimmedLine)) {
+                $escaped = e($trimmedLine);
+                $formattedLines[] = '<div class="mt-4 p-3.5 rounded-xl bg-slate-800/40 border border-slate-700/60 text-[11px] text-slate-400 font-sans leading-relaxed">' . $escaped . '</div>';
+                continue;
+            }
 
             // Kutipan balasan email (dimulai dengan > atau &gt;)
             if (str_starts_with($trimmedLine, '>') || str_starts_with($trimmedLine, '&gt;')) {

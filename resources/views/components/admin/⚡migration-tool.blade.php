@@ -418,10 +418,10 @@ new class extends Component
                                     $body = (string) $msg->getHTMLBody();
                                 } else {
                                     $textBody = (string) $msg->getTextBody();
-                                    $body = !empty($textBody) ? $textBody : $this->cleanRawBodyContent($rawContent);
+                                    $body = !empty($textBody) ? $textBody : $this->cleanRawBodyContent($fullRaw);
                                 }
                             } catch (\Throwable $e) {
-                                $body = $this->cleanRawBodyContent($rawContent);
+                                $body = $this->cleanRawBodyContent($fullRaw);
                             }
 
                             $isRead = false;
@@ -552,12 +552,21 @@ new class extends Component
     protected function cleanRawBodyContent(string $raw): string
     {
         $parts = preg_split("/\r?\n\r?\n/", $raw, 2);
+        $header = $parts[0] ?? '';
         $body = isset($parts[1]) ? $parts[1] : $raw;
 
-        if (preg_match('/--([a-zA-Z0-9_\-\.\/=]{10,})/', $body, $bMatch)) {
-            $boundary = $bMatch[1];
+        $boundary = null;
+        if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $header, $bMatch)) {
+            $boundary = trim($bMatch[1]);
+        } elseif (preg_match('/--([a-zA-Z0-9_\-\.\/=]{8,})/', $body, $bMatch)) {
+            $boundary = trim($bMatch[1]);
+        }
+
+        if ($boundary) {
             $subParts = explode('--' . $boundary, $body);
-            $bestBody = '';
+            $bestHtml = null;
+            $bestText = null;
+
             foreach ($subParts as $subPart) {
                 $subPart = trim($subPart);
                 if (empty($subPart) || $subPart === '--') continue;
@@ -566,34 +575,46 @@ new class extends Component
                 $partHeader = $partSections[0] ?? '';
                 $partBody = $partSections[1] ?? '';
 
-                if (stripos($partHeader, 'text/html') !== false) {
-                    if (stripos($partHeader, 'base64') !== false) {
-                        $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody));
-                        if ($decoded) return $decoded;
-                    } elseif (stripos($partHeader, 'quoted-printable') !== false) {
-                        return quoted_printable_decode($partBody);
+                // Cek rekursif multipart (misalnya multipart/alternative di dalam multipart/mixed)
+                if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $innerBMatch)) {
+                    $innerClean = $this->cleanRawBodyContent($subPart);
+                    if (!empty($innerClean)) {
+                        if (preg_match('/<(?:html|body|div|p|table|tbody|tr|td|span|img|h[1-6]|ul|ol|li)\b/i', $innerClean)) {
+                            $bestHtml = $innerClean;
+                        } else {
+                            if (!$bestText) $bestText = $innerClean;
+                        }
                     }
-                    return $partBody;
+                    continue;
                 }
 
-                if (stripos($partHeader, 'text/plain') !== false && empty($bestBody)) {
+                if (stripos($partHeader, 'text/html') !== false) {
+                    $decoded = $partBody;
                     if (stripos($partHeader, 'base64') !== false) {
-                        $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody));
-                        if ($decoded) $bestBody = $decoded;
+                        $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody)) ?: $partBody;
                     } elseif (stripos($partHeader, 'quoted-printable') !== false) {
-                        $bestBody = quoted_printable_decode($partBody);
-                    } else {
-                        $bestBody = $partBody;
+                        $decoded = quoted_printable_decode($partBody);
                     }
+                    $bestHtml = $decoded;
+                } elseif (stripos($partHeader, 'text/plain') !== false) {
+                    $decoded = $partBody;
+                    if (stripos($partHeader, 'base64') !== false) {
+                        $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody)) ?: $partBody;
+                    } elseif (stripos($partHeader, 'quoted-printable') !== false) {
+                        $decoded = quoted_printable_decode($partBody);
+                    }
+                    if (!$bestText) $bestText = $decoded;
                 }
             }
-            if (!empty($bestBody)) return $bestBody;
+
+            if (!empty($bestHtml)) return $bestHtml;
+            if (!empty($bestText)) return $bestText;
         }
 
-        if (stripos($raw, 'Content-Transfer-Encoding: base64') !== false) {
+        if (stripos($header, 'Content-Transfer-Encoding: base64') !== false || stripos($raw, 'Content-Transfer-Encoding: base64') !== false) {
             $decoded = @base64_decode(preg_replace('/\s+/', '', $body));
             if ($decoded) return $decoded;
-        } elseif (stripos($raw, 'Content-Transfer-Encoding: quoted-printable') !== false) {
+        } elseif (stripos($header, 'Content-Transfer-Encoding: quoted-printable') !== false || stripos($raw, 'Content-Transfer-Encoding: quoted-printable') !== false) {
             return quoted_printable_decode($body);
         }
 
