@@ -1774,10 +1774,10 @@ new class extends Component
                 </div>
             </div>
 
-            <!-- Active Folder Badge (Desktop / Tablet) -->
+            <!-- Active Folder / Menu Badge (Desktop / Tablet) -->
             <div class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 font-medium ml-1">
                 <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : ($activeFolder === 'contacts' ? 'users' : 'folder'))))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
-                <span class="text-slate-400">Folder:</span>
+                <span class="text-slate-400">{{ $activeFolder === 'contacts' ? 'Menu:' : 'Folder:' }}</span>
                 <span class="font-bold text-white capitalize">
                     {{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : ($activeFolder === 'contacts' ? 'Kontak' : $activeFolder))))) }}
                 </span>
@@ -1960,18 +1960,13 @@ new class extends Component
 
                 <!-- Kontak (Otomatis Tersimpan dari Komunikasi) -->
                 <button wire:click="selectFolder('contacts')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'contacts' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-lg shadow-emerald-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'contacts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
-                        <div class="p-1 rounded-lg {{ $activeFolder === 'contacts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-emerald-400' }}">
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'contacts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
                             <i data-lucide="users" class="w-3.5 h-3.5"></i>
                         </div>
                         <span>Kontak</span>
                     </div>
-                    @if(($counts['contacts'] ?? 0) > 0)
-                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'contacts' ? 'bg-white/20 text-white' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' }} font-bold">
-                            {{ $counts['contacts'] }}
-                        </span>
-                    @endif
                 </button>
 
                 <!-- Bagian Folder (Bisa Hide & Unhide, Label murni 'Folder', Tanpa Folder Default) -->
@@ -2069,20 +2064,13 @@ new class extends Component
                 
                 <!-- Sub-Header: Judul Kontak, Pencarian & Tombol Aksi -->
                 <div class="p-3.5 sm:px-6 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center gap-2.5">
-                            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-sm">
-                                <i data-lucide="users" class="w-4 h-4"></i>
-                            </div>
-                            <div>
-                                <h1 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                                    <span>Buku Kontak</span>
-                                    <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                                        {{ count($contactsList) }} Kontak
-                                    </span>
-                                </h1>
-                            </div>
-                        </div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                            <span>Kontak</span>
+                            @if(count($contactsList) > 0)
+                                <span class="text-xs font-mono font-normal text-slate-400">({{ count($contactsList) }})</span>
+                            @endif
+                        </h1>
                     </div>
 
                     <!-- Search Input Kontak & Tombol Aksi -->
@@ -2092,7 +2080,7 @@ new class extends Component
                             <input type="text" 
                                    wire:model.live.debounce.250ms="contactSearchQuery" 
                                    placeholder="Cari kontak (nama, email, perusahaan)..."
-                                   class="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-inner">
+                                   class="w-full pl-9 pr-3.5 py-1.5 rounded-full bg-slate-950/80 border border-slate-700/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all shadow-inner">
                             @if(!empty($contactSearchQuery))
                                 <button type="button" 
                                         wire:click="$set('contactSearchQuery', '')" 
@@ -2107,15 +2095,15 @@ new class extends Component
                                 wire:click="syncContactsFromHistory" 
                                 class="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/70 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                                 title="Sinkronkan kontak dari seluruh riwayat email masuk dan keluar">
-                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-teal-400" wire:loading.class="animate-spin" wire:target="syncContactsFromHistory"></i>
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="syncContactsFromHistory"></i>
                             <span class="hidden md:inline">Sinkronkan</span>
                         </button>
 
                         <!-- Tombol Tambah Kontak Baru -->
                         <button type="button" 
                                 wire:click="openCreateContactModal" 
-                                class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0">
-                            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                                class="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 cursor-pointer shrink-0">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                             <span>Tambah Kontak</span>
                         </button>
                     </div>
@@ -2123,7 +2111,7 @@ new class extends Component
 
                 <!-- Notifikasi Flash Kontak Sukses -->
                 @if (session()->has('contact_success'))
-                <div class="mx-4 sm:mx-6 mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2 shadow-sm">
+                <div class="mx-4 sm:mx-6 mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2 shadow-sm shrink-0">
                     <div class="flex items-center gap-2">
                         <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0"></i>
                         <span>{{ session('contact_success') }}</span>
@@ -2134,46 +2122,69 @@ new class extends Component
                 </div>
                 @endif
 
-                <!-- Area Grid Kontak -->
-                <div class="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+                <!-- Area Tabel / Daftar Baris Kontak (Gaya Google Contacts / Webmail Standard) -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar">
                     @if($contactsList->isNotEmpty())
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-                        @foreach($contactsList as $c)
-                        @php
-                            $initial = strtoupper(substr($c->name ?: ($c->email ?: 'C'), 0, 1));
-                            $gradientIndex = (crc32($c->email) % 5);
-                            $gradients = [
-                                'from-cyan-600 to-blue-600',
-                                'from-indigo-600 to-purple-600',
-                                'from-emerald-600 to-teal-600',
-                                'from-amber-600 to-orange-600',
-                                'from-rose-600 to-pink-600',
-                            ];
-                            $cardGradient = $gradients[abs($gradientIndex)];
-                        @endphp
-                        <div class="group relative rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-slate-700/90 p-4 transition-all duration-200 shadow-md hover:shadow-xl hover:shadow-cyan-500/5 flex flex-col justify-between">
-                            <div>
-                                <!-- Header Kartu Kontak: Avatar, Nama, Email & Tombol Aksi -->
-                                <div class="flex items-start justify-between gap-3">
-                                    <div class="flex items-center gap-3 min-w-0">
-                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr {{ $cardGradient }} text-white font-bold flex items-center justify-center text-sm shadow-md shrink-0">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="sticky top-0 bg-slate-950/95 backdrop-blur-md text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800/80 z-10">
+                            <tr>
+                                <th class="py-3 px-4 sm:px-6">Nama</th>
+                                <th class="py-3 px-4">Email</th>
+                                <th class="py-3 px-4 hidden md:table-cell">Nomor Telepon</th>
+                                <th class="py-3 px-4 hidden lg:table-cell">Perusahaan</th>
+                                <th class="py-3 px-4 sm:px-6 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/50">
+                            @foreach($contactsList as $c)
+                            @php
+                                $initial = strtoupper(substr($c->name ?: ($c->email ?: 'C'), 0, 1));
+                            @endphp
+                            <tr class="hover:bg-slate-900/60 transition-colors group">
+                                <!-- Nama & Avatar Bulat -->
+                                <td class="py-3 px-4 sm:px-6">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-cyan-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
                                             {{ $initial }}
                                         </div>
-                                        <div class="min-w-0 flex-1">
-                                            <h4 class="text-sm font-bold text-white truncate group-hover:text-cyan-300 transition-colors" title="{{ $c->name ?: $c->email }}">
+                                        <div class="min-w-0">
+                                            <span class="font-semibold text-slate-200 block truncate group-hover:text-cyan-300 transition-colors">
                                                 {{ $c->name ?: explode('@', $c->email)[0] }}
-                                            </h4>
-                                            <span class="text-xs text-cyan-400 font-mono truncate block" title="{{ $c->email }}">
-                                                {{ $c->email }}
                                             </span>
+                                            @if($c->notes)
+                                                <span class="text-[10px] text-slate-500 block truncate max-w-xs">{{ $c->notes }}</span>
+                                            @endif
                                         </div>
                                     </div>
+                                </td>
 
-                                    <!-- Action Menu: Edit & Hapus -->
-                                    <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <!-- Email -->
+                                <td class="py-3 px-4">
+                                    <span class="text-cyan-400 font-mono text-xs">{{ $c->email }}</span>
+                                </td>
+
+                                <!-- Nomor Telepon -->
+                                <td class="py-3 px-4 text-slate-400 hidden md:table-cell font-mono">
+                                    {{ $c->phone ?: '-' }}
+                                </td>
+
+                                <!-- Perusahaan -->
+                                <td class="py-3 px-4 text-slate-400 hidden lg:table-cell">
+                                    {{ $c->company ?: '-' }}
+                                </td>
+
+                                <!-- Aksi Cepat: Kirim Email, Edit, Hapus -->
+                                <td class="py-3 px-4 sm:px-6 text-right">
+                                    <div class="flex items-center justify-end gap-1">
+                                        <button type="button" 
+                                                wire:click="composeToContact('{{ $c->email }}')" 
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer" 
+                                                title="Tulis pesan ke {{ $c->email }}">
+                                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                        </button>
                                         <button type="button" 
                                                 wire:click="openEditContactModal({{ $c->id }})" 
-                                                class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer" 
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer" 
                                                 title="Edit kontak">
                                             <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                                         </button>
@@ -2185,84 +2196,41 @@ new class extends Component
                                             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                         </button>
                                     </div>
-                                </div>
-
-                                <!-- Detail Kontak: Perusahaan, Telepon, Catatan -->
-                                <div class="mt-3 space-y-1.5 text-xs text-slate-400">
-                                    @if($c->company)
-                                    <div class="flex items-center gap-2 truncate">
-                                        <i data-lucide="building" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
-                                        <span class="truncate">{{ $c->company }}</span>
-                                    </div>
-                                    @endif
-
-                                    @if($c->phone)
-                                    <div class="flex items-center gap-2 truncate">
-                                        <i data-lucide="phone" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
-                                        <span class="truncate font-mono">{{ $c->phone }}</span>
-                                    </div>
-                                    @endif
-
-                                    @if($c->notes)
-                                    <div class="text-[11px] text-slate-400/90 italic bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 line-clamp-2 mt-2">
-                                        "{{ $c->notes }}"
-                                    </div>
-                                    @endif
-                                </div>
-                            </div>
-
-                            <!-- Footer Kartu: Riwayat Komunikasi & Tombol Kirim Email -->
-                            <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-col gap-2.5">
-                                <div class="flex items-center justify-between text-[11px] text-slate-500">
-                                    <span class="flex items-center gap-1 font-mono">
-                                        <i data-lucide="message-square" class="w-3 h-3 text-emerald-400"></i>
-                                        <span>{{ $c->communication_count }}x komunikasi</span>
-                                    </span>
-                                    <span>
-                                        {{ $c->last_communicated_at ? $c->last_communicated_at->diffForHumans() : 'Baru saja' }}
-                                    </span>
-                                </div>
-
-                                <button type="button" 
-                                        wire:click="composeToContact('{{ $c->email }}')" 
-                                        class="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500/10 via-indigo-500/10 to-purple-500/10 hover:from-cyan-500 hover:to-indigo-600 border border-cyan-500/30 hover:border-transparent text-cyan-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer group-hover:border-cyan-500/60">
-                                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                                    <span>Kirim Pesan</span>
-                                </button>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                     @else
                     <!-- Tampilan Kosong (Empty State) -->
                     <div class="flex flex-col items-center justify-center h-full min-h-[350px] text-center p-6">
-                        <div class="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4 shadow-inner">
-                            <i data-lucide="users" class="w-8 h-8 text-cyan-400/60"></i>
+                        <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-3 shadow-inner">
+                            <i data-lucide="users" class="w-7 h-7 text-cyan-400/60"></i>
                         </div>
                         @if(!empty($contactSearchQuery))
-                            <h3 class="text-base font-bold text-white mb-1">Kontak tidak ditemukan</h3>
-                            <p class="text-xs text-slate-400 max-w-sm mb-4">
-                                Tidak ada kontak yang cocok dengan kata kunci "<span class="text-cyan-400 font-semibold">{{ $contactSearchQuery }}</span>".
+                            <h3 class="text-sm font-bold text-white mb-1">Kontak tidak ditemukan</h3>
+                            <p class="text-xs text-slate-400 max-w-sm mb-3">
+                                Tidak ada kontak yang cocok dengan pencarian "<span class="text-cyan-400 font-semibold">{{ $contactSearchQuery }}</span>".
                             </p>
                             <button type="button" wire:click="$set('contactSearchQuery', '')" class="text-xs text-cyan-400 hover:underline cursor-pointer">
                                 Bersihkan Pencarian
                             </button>
                         @else
-                            <h3 class="text-base font-bold text-white mb-1">Belum Ada Kontak Tersimpan</h3>
-                            <p class="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
-                                Semua orang yang pernah bertukar email dengan Anda (baik yang Anda kirimi maupun yang mengirim email ke Anda) akan otomatis tersimpan di sini. Anda juga dapat menambahkan kontak secara manual.
+                            <h3 class="text-sm font-bold text-white mb-1">Belum Ada Kontak Tersimpan</h3>
+                            <p class="text-xs text-slate-400 max-w-md mb-4 leading-relaxed">
+                                Semua orang yang pernah bertukar email dengan Anda akan otomatis tersimpan di sini. Anda juga dapat menambahkan kontak baru kapan saja.
                             </p>
-                            <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2.5">
                                 <button type="button" 
                                         wire:click="openCreateContactModal" 
-                                        class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20 cursor-pointer">
-                                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                                        class="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 cursor-pointer">
+                                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                                     <span>Tambah Kontak Baru</span>
                                 </button>
                                 <button type="button" 
                                         wire:click="syncContactsFromHistory" 
-                                        class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl flex items-center gap-2 transition-all border border-slate-700 cursor-pointer">
-                                    <i data-lucide="refresh-cw" class="w-4 h-4 text-cyan-400"></i>
+                                        class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-cyan-400"></i>
                                     <span>Pindai Riwayat Email</span>
                                 </button>
                             </div>
