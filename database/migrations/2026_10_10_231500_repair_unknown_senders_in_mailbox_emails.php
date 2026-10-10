@@ -72,9 +72,9 @@ return new class extends Migration
                         'from_name'  => $foundName ?: $em->from_name,
                     ]);
                 } else {
-                    $cleanName = ($em->from_name && !str_starts_with($em->from_name, 'unknown@') && strtolower($em->from_name) !== 'pengirim')
+                    $cleanName = ($em->from_name && !str_starts_with($em->from_name, 'unknown@') && !in_array(strtolower($em->from_name), ['pengirim', 'sender', 'from sender', 'form sender', 'unknown']))
                         ? $em->from_name
-                        : 'Pengirim';
+                        : '';
                     $em->update([
                         'from_email' => '',
                         'from_name'  => $cleanName,

@@ -282,8 +282,10 @@ new class extends Component
                     foreach ($messages as $idx => $msg) {
                         $this->stats['total']++;
                         try {
-                            $rawContent = $msg->getRawBody();
-                            $size = strlen($rawContent);
+                            $rawHeader = $msg->getHeader() ? (string)$msg->getHeader()->raw : '';
+                            $rawBody = $msg->getRawBody();
+                            $fullRaw = (!empty($rawHeader) ? trim($rawHeader) . "\r\n\r\n" : '') . $rawBody;
+                            $size = strlen($fullRaw);
                             $this->stats['bytes'] += $size;
 
                             $fromEmail = '';
@@ -320,9 +322,9 @@ new class extends Component
                                 }
                             } catch (\Throwable $e) {}
 
-                            // Ekstrak langsung dari rawContent RFC822 jika Webklex belum mendapatkan email pengirim
+                            // Ekstrak langsung dari rawHeader RFC822 jika Webklex belum mendapatkan email pengirim
                             if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
-                                if (preg_match('/^From:\s*(.+)$/mi', $rawContent, $m)) {
+                                if (preg_match('/^From:\s*(.+)$/mi', $rawHeader, $m)) {
                                     $rawFrom = trim($m[1]);
                                     if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawFrom, $fm)) {
                                         $nameClean = trim(trim($fm[1]), '"\' ');
@@ -335,7 +337,7 @@ new class extends Component
                             }
 
                             if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
-                                if (preg_match('/^Sender:\s*(.+)$/mi', $rawContent, $m)) {
+                                if (preg_match('/^Sender:\s*(.+)$/mi', $rawHeader, $m)) {
                                     $rawSender = trim($m[1]);
                                     if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawSender, $fm)) {
                                         $nameClean = trim(trim($fm[1]), '"\' ');
@@ -348,7 +350,20 @@ new class extends Component
                             }
 
                             if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
-                                if (preg_match('/^Return-Path:\s*<?([^>\r\n]+)>?/mi', $rawContent, $m)) {
+                                if (preg_match('/^Reply-To:\s*(.+)$/mi', $rawHeader, $m)) {
+                                    $rawReply = trim($m[1]);
+                                    if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawReply, $fm)) {
+                                        $nameClean = trim(trim($fm[1]), '"\' ');
+                                        $fromName = $fromName ?: ($nameClean ? $this->decodeMimeHeader($nameClean) : '');
+                                        $fromEmail = strtolower(trim($fm[2]));
+                                    } else {
+                                        $fromEmail = strtolower(trim($rawReply, " \t\n\r\0\x0B\"'<>"));
+                                    }
+                                }
+                            }
+
+                            if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
+                                if (preg_match('/^Return-Path:\s*<?([^>\r\n]+)>?/mi', $rawHeader, $m)) {
                                     $fromEmail = strtolower(trim($m[1]));
                                 }
                             }
@@ -364,7 +379,7 @@ new class extends Component
                                     $prefix = explode('@', $fromEmail)[0];
                                     $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
                                 } else {
-                                    $fromName = 'Pengirim';
+                                    $fromName = '';
                                 }
                             }
 
@@ -460,7 +475,8 @@ new class extends Component
 
                             if ($existingEmail) {
                                 $existingEmail->update([
-                                    'from_name'   => $fromName,
+                                    'from_name'   => ($fromName && $fromName !== 'Pengirim') ? $fromName : $existingEmail->from_name,
+                                    'from_email'  => $fromEmail ?: $existingEmail->from_email,
                                     'body'        => $body,
                                     'attachments' => !empty($attachmentsData) ? $attachmentsData : $existingEmail->attachments,
                                     'is_read'     => $isRead,
@@ -502,7 +518,7 @@ new class extends Component
                                     @mkdir($targetDir, 0770, true);
                                 }
                                 $msgFilename = time() . '.' . uniqid('msg_') . ':2,S';
-                                @file_put_contents($targetDir . '/' . $msgFilename, $rawContent);
+                                @file_put_contents($targetDir . '/' . $msgFilename, $fullRaw);
                             }
 
                             $this->stats['success']++;
@@ -637,7 +653,7 @@ new class extends Component
                 $prefix = explode('@', $fromEmail)[0];
                 $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
             } else {
-                $fromName = 'Pengirim';
+                $fromName = '';
             }
         }
 

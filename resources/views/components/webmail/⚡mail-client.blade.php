@@ -355,12 +355,17 @@ new class extends Component
     {
         if (!$user) return;
 
-        // 1. Perbaiki email di folder sent yang salah mencatat unknown@domain.com
+        // 1. Perbaiki email di folder sent yang salah mencatat unknown@domain.com atau Pengirim
         MailboxEmail::where('virtual_user_id', $user->id)
             ->where('folder', 'sent')
             ->where(function ($q) {
                 $q->where('from_email', 'unknown@domain.com')
                   ->orWhere('from_email', 'like', 'unknown@%')
+                  ->orWhere('from_name', 'like', 'unknown@%')
+                  ->orWhere('from_name', 'Pengirim')
+                  ->orWhere('from_name', 'sender')
+                  ->orWhere('from_name', 'form sender')
+                  ->orWhere('from_name', 'from sender')
                   ->orWhereNull('from_email')
                   ->orWhere('from_email', '');
             })
@@ -369,14 +374,18 @@ new class extends Component
                 'from_name'  => $user->name ?: ucwords(explode('@', $user->email)[0]),
             ]);
 
-        // 2. Perbaiki email di folder lain yang from_email-nya masih unknown@domain.com
+        // 2. Perbaiki email di folder lain yang from_email/from_name-nya masih generic/unknown/Pengirim
         $unknownEmails = MailboxEmail::where('virtual_user_id', $user->id)
             ->where(function ($q) {
                 $q->where('from_email', 'unknown@domain.com')
                   ->orWhere('from_email', 'like', 'unknown@%')
-                  ->orWhere('from_name', 'like', 'unknown@%');
+                  ->orWhere('from_name', 'like', 'unknown@%')
+                  ->orWhere('from_name', 'Pengirim')
+                  ->orWhere('from_name', 'sender')
+                  ->orWhere('from_name', 'form sender')
+                  ->orWhere('from_name', 'from sender');
             })
-            ->take(50)
+            ->take(100)
             ->get();
 
         foreach ($unknownEmails as $em) {
@@ -394,23 +403,41 @@ new class extends Component
                 }
             }
 
+            if (empty($foundEmail) && !empty($em->body) && preg_match('/(?:^|\n)Reply-To:\s*([^\r\n]+)/i', $em->body, $bm)) {
+                $rawReply = trim($bm[1]);
+                if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawReply, $fbm)) {
+                    $nameClean = trim(trim($fbm[1]), '"\' ');
+                    $foundName = $foundName ?: ($nameClean ? $this->decodeMimeHeader($nameClean) : null);
+                    $foundEmail = strtolower(trim($fbm[2]));
+                } else {
+                    $foundEmail = strtolower(trim($rawReply, " \t\n\r\0\x0B\"'<>"));
+                }
+            }
+
             if (empty($foundEmail) && !empty($em->body) && preg_match('/(?:^|\n)Return-Path:\s*<?([^>\r\n]+)>?/i', $em->body, $bm)) {
                 $foundEmail = strtolower(trim($bm[1]));
             }
 
+            // Coba temukan header forwarded / reply di dalam body (mis. Dari: Budi <budi@...> atau From: Budi <budi@...>)
+            if (empty($foundEmail) && !empty($em->body) && preg_match('/(?:Dari|From):\s*([^\r\n<]+)<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>/i', $em->body, $bm)) {
+                $nameClean = trim(trim($bm[1]), '"\' ');
+                $foundName = $nameClean ? $this->decodeMimeHeader($nameClean) : null;
+                $foundEmail = strtolower(trim($bm[2]));
+            }
+
             if (!empty($foundEmail) && filter_var($foundEmail, FILTER_VALIDATE_EMAIL) && !str_starts_with($foundEmail, 'unknown@')) {
-                if (empty($foundName)) {
+                if (empty($foundName) || in_array(strtolower($foundName), ['pengirim', 'sender', 'from sender', 'form sender', 'unknown'])) {
                     $prefix = explode('@', $foundEmail)[0];
                     $foundName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
                 }
                 $em->update([
                     'from_email' => $foundEmail,
-                    'from_name'  => $foundName ?: $em->from_name,
+                    'from_name'  => $foundName ?: ($em->from_name && !in_array(strtolower($em->from_name), ['pengirim', 'sender']) ? $em->from_name : $foundName),
                 ]);
             } else {
-                $cleanName = ($em->from_name && !str_starts_with($em->from_name, 'unknown@') && strtolower($em->from_name) !== 'pengirim')
+                $cleanName = ($em->from_name && !str_starts_with($em->from_name, 'unknown@') && !in_array(strtolower(trim($em->from_name)), ['pengirim', 'sender', 'from sender', 'form sender', 'unknown']))
                     ? $em->from_name
-                    : 'Pengirim';
+                    : '';
                 $em->update([
                     'from_email' => '',
                     'from_name'  => $cleanName,
@@ -518,7 +545,7 @@ new class extends Component
                     MailboxEmail::create([
                         'virtual_user_id' => $user->id,
                         'folder' => 'inbox',
-                        'from_name' => $parsed['from_name'] ?: 'Pengirim',
+                        'from_name' => $parsed['from_name'] ?: '',
                         'from_email' => $parsed['from_email'] ?: '',
                         'to' => $user->email,
                         'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
@@ -608,7 +635,7 @@ new class extends Component
                 $prefix = explode('@', $fromEmail)[0];
                 $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
             } else {
-                $fromName = 'Pengirim';
+                $fromName = '';
             }
         }
 
@@ -1741,7 +1768,7 @@ new class extends Component
             return ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
         }
 
-        return (!empty($clean) && !str_starts_with($cleanLower, 'unknown@') && $cleanLower !== 'unknown') ? $clean : 'Pengirim';
+        return (!empty($clean) && !str_starts_with($cleanLower, 'unknown@') && !in_array($cleanLower, ['unknown', 'pengirim', 'sender', 'from sender', 'form sender'])) ? $clean : '';
     }
 
     /**
@@ -2597,7 +2624,7 @@ new class extends Component
                                 @if($activeFolder === 'sent')
                                     <span class="text-slate-400 font-normal">Ke:</span> {{ $email['to'] ?: 'Penerima' }}
                                 @else
-                                    {{ $email['from_name'] }}
+                                    {{ $email['from_name'] ?: ($email['from_email'] ?: '(Tanpa Pengirim)') }}
                                 @endif
                             </span>
                         </div>
@@ -2759,12 +2786,13 @@ new class extends Component
                     <!-- Sender Info Header Card (Hostinger Style) -->
                     <div class="flex flex-wrap items-start justify-between gap-4 pb-2" x-data="{ showHeaderDetails: false }">
                         <div class="space-y-1 min-w-0">
-                            <!-- From line -->
-                            <div class="text-sm">
-                                <span class="font-bold text-white">From</span>
-                                <span class="font-bold text-slate-200 ml-1">{{ $selectedEmail['from_name'] }}</span>
-                                @if(!empty($selectedEmail['from_email']))
-                                    <span class="text-xs text-slate-400 font-mono ml-1">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                            <!-- Sender Name & Email line (Clean Gmail / Hostinger style, no hardcoded 'From' label) -->
+                            <div class="text-sm flex items-baseline gap-1.5 flex-wrap">
+                                <span class="font-bold text-white text-base">
+                                    {{ $selectedEmail['from_name'] ?: (!empty($selectedEmail['from_email']) ? $selectedEmail['from_email'] : '(Tanpa Pengirim)') }}
+                                </span>
+                                @if(!empty($selectedEmail['from_email']) && $selectedEmail['from_email'] !== $selectedEmail['from_name'])
+                                    <span class="text-xs text-slate-400 font-mono">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
                                 @endif
                             </div>
                             
@@ -2784,7 +2812,7 @@ new class extends Component
 
                             <!-- Dropdown details -->
                             <div x-show="showHeaderDetails" x-collapse class="mt-2 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 space-y-1" style="display: none;">
-                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] }}@if(!empty($selectedEmail['from_email'])) &lt;{{ $selectedEmail['from_email'] }}&gt;@endif</span></div>
+                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] ?: (!empty($selectedEmail['from_email']) ? $selectedEmail['from_email'] : '-') }}@if(!empty($selectedEmail['from_email']) && !empty($selectedEmail['from_name'])) &lt;{{ $selectedEmail['from_email'] }}&gt;@endif</span></div>
                                 <div><span class="text-slate-500">To:</span> <span class="text-slate-200">{{ $selectedEmail['to'] }}</span></div>
                                 <div><span class="text-slate-500">Date:</span> <span class="text-slate-200">{{ $selectedEmail['date'] }}</span></div>
                                 <div><span class="text-slate-500">Security:</span> <span class="text-emerald-400">Standard TLS Encryption (Postfix/Dovecot)</span></div>

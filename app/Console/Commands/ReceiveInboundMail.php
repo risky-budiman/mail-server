@@ -98,7 +98,7 @@ class ReceiveInboundMail extends Command
                 $prefix = explode('@', $fromEmail)[0];
                 $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
             } else {
-                $fromName = 'Pengirim';
+                $fromName = '';
             }
         }
 
@@ -152,7 +152,7 @@ class ReceiveInboundMail extends Command
             MailboxEmail::create([
                 'virtual_user_id' => $user->id,
                 'folder' => 'inbox',
-                'from_name' => $fromName ?: 'Pengirim',
+                'from_name' => $fromName ?: '',
                 'from_email' => $fromEmail ?: '',
                 'to' => $toEmail ?: $user->email,
                 'subject' => $subject,
