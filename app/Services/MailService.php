@@ -76,49 +76,8 @@ class MailService
         $messageId = '<' . time() . '.' . bin2hex(random_bytes(8)) . '@' . $domain . '>';
         $dateRfc2822 = date('r');
 
-        // 1. Coba kirim via Laravel Mailer SMTP / Sendmail dengan format Multipart Alternative (HTML + Text Plain)
-        try {
-            $plainText = trim(strip_tags(preg_replace('/<br\s*\/?>/i', "\n", $bodyContent)));
-            $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
-            $formattedHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
-
-            Mail::mailer(config('mail.default', 'sendmail'))->send([], [], function ($message) use ($fromEmail, $fromName, $to, $subject, $messageId, $attachments, $plainText, $formattedHtml) {
-                $message->from($fromEmail, $fromName)
-                        ->to($to)
-                        ->subject($subject)
-                        ->text($plainText)
-                        ->html($formattedHtml);
-                $message->getHeaders()->addIdHeader('Message-ID', $messageId);
-
-                // Lampirkan file jika ada
-                foreach ($attachments as $att) {
-                    if (is_string($att) && file_exists($att)) {
-                        $message->attach($att);
-                    } elseif (is_array($att)) {
-                        $filePath = null;
-                        if (!empty($att['path']) && file_exists($att['path'])) {
-                            $filePath = $att['path'];
-                        } elseif (!empty($att['storage_path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['storage_path'])) {
-                            $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['storage_path']);
-                        } elseif (!empty($att['path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['path'])) {
-                            $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['path']);
-                        }
-                        if ($filePath && file_exists($filePath)) {
-                            $message->attach($filePath, ['as' => $att['name'] ?? basename($filePath)]);
-                        }
-                    } elseif (is_object($att) && method_exists($att, 'getRealPath') && file_exists($att->getRealPath())) {
-                        $message->attach($att->getRealPath(), [
-                            'as' => method_exists($att, 'getClientOriginalName') ? $att->getClientOriginalName() : basename($att->getRealPath()),
-                        ]);
-                    }
-                }
-            });
-            return true;
-        } catch (\Throwable $e) {
-            Log::warning("Laravel Mailer Attempt Failed: " . $e->getMessage() . ". Trying fallback pipe to sendmail...");
-        }
-
-        // 2. Fallback: Langsung pipe ke binary Postfix sendmail (/usr/sbin/sendmail) di Linux VPS
+        // 1. Pada Linux VPS dengan Postfix (/usr/sbin/sendmail), gunakan pipe biner langsung ke engine Postfix
+        // Ini memastikan email langsung masuk ke antrean Postfix tanpa terhalang setelan MAIL_MAILER=log di .env
         if (PHP_OS_FAMILY === 'Linux' && file_exists('/usr/sbin/sendmail')) {
             try {
                 $mixedBoundary = "==_MailIDS_Mixed_" . md5(uniqid(microtime(true)));
@@ -194,17 +153,63 @@ class MailService
                               $alternativeBody;
                 }
 
-                // Kirim dengan parameter -f agar Return-Path cocok dengan pengirim (SPF alignment)
+                // Kirim langsung ke Postfix sendmail dengan flag -f untuk SPF alignment
                 $pipe = @popen("/usr/sbin/sendmail -t -i -f " . escapeshellarg($fromEmail), "w");
                 if ($pipe) {
                     fwrite($pipe, $rawMsg);
                     $returnCode = pclose($pipe);
                     if ($returnCode === 0) {
+                        Log::info("Email berhasil diserahkan ke Postfix via /usr/sbin/sendmail untuk: {$to}");
                         return true;
                     }
                 }
             } catch (\Throwable $fallbackEx) {
-                Log::error("Sendmail binary pipe error: " . $fallbackEx->getMessage());
+                Log::warning("Sendmail binary pipe notice: " . $fallbackEx->getMessage() . ". Mencoba Laravel Mailer...");
+            }
+        }
+
+        // 2. Coba kirim via Laravel Mailer SMTP / Sendmail
+        $configuredMailer = config('mail.default', 'sendmail');
+        if ($configuredMailer !== 'log') {
+            try {
+                $plainText = trim(strip_tags(preg_replace('/<br\s*\/?>/i', "\n", $bodyContent)));
+                $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+                $formattedHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
+
+                Mail::mailer($configuredMailer)->send([], [], function ($message) use ($fromEmail, $fromName, $to, $subject, $messageId, $attachments, $plainText, $formattedHtml) {
+                    $message->from($fromEmail, $fromName)
+                            ->to($to)
+                            ->subject($subject)
+                            ->text($plainText)
+                            ->html($formattedHtml);
+                    $message->getHeaders()->addIdHeader('Message-ID', $messageId);
+
+                    // Lampirkan file jika ada
+                    foreach ($attachments as $att) {
+                        if (is_string($att) && file_exists($att)) {
+                            $message->attach($att);
+                        } elseif (is_array($att)) {
+                            $filePath = null;
+                            if (!empty($att['path']) && file_exists($att['path'])) {
+                                $filePath = $att['path'];
+                            } elseif (!empty($att['storage_path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['storage_path'])) {
+                                $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['storage_path']);
+                            } elseif (!empty($att['path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['path'])) {
+                                $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['path']);
+                            }
+                            if ($filePath && file_exists($filePath)) {
+                                $message->attach($filePath, ['as' => $att['name'] ?? basename($filePath)]);
+                            }
+                        } elseif (is_object($att) && method_exists($att, 'getRealPath') && file_exists($att->getRealPath())) {
+                            $message->attach($att->getRealPath(), [
+                                'as' => method_exists($att, 'getClientOriginalName') ? $att->getClientOriginalName() : basename($att->getRealPath()),
+                            ]);
+                        }
+                    }
+                });
+                return true;
+            } catch (\Throwable $e) {
+                Log::warning("Laravel Mailer Attempt Failed: " . $e->getMessage());
             }
         }
 
