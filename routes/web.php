@@ -56,3 +56,11 @@ Route::prefix('admin')->middleware('auth.admin')->group(function () {
 Route::middleware('auth.mailbox')->group(function () {
     Route::livewire('/webmail', 'webmail.mail-client')->name('webmail.client');
 });
+
+// ==========================================
+// 4. ATTACHMENT DOWNLOAD & PREVIEW
+// ==========================================
+Route::get('/webmail/attachment/{email}/{index}/download', [App\Http\Controllers\AttachmentController::class, 'download'])
+    ->name('webmail.attachment.download');
+Route::get('/webmail/attachment/{email}/{index}/preview', [App\Http\Controllers\AttachmentController::class, 'preview'])
+    ->name('webmail.attachment.preview');

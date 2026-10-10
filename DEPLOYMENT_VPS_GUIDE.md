@@ -495,4 +495,38 @@ php artisan mail:backup
 File cadangan berformat JSON akan tersimpan di `storage/app/backups/`.
 
 ---
+
+### 13. Solusi Khusus: Email Alias (Forwarding) & Lampiran Dokumen (Attachments)
+
+#### A. Penanganan Alias Forwarding & Pengiriman/Penerimaan Email Masuk
+Di Postfix, tabel `virtual_alias_maps` dievaluasi **sebelum** `virtual_mailbox_maps`. Jika Anda membuat alias yang sama dengan nama mailbox (misalnya `admin@perusahaan.co.id` yang diarahkan ke `personal@gmail.com`), secara default Postfix akan mengalihkan **seluruh** email masuk ke Gmail sehingga mailbox lokal tidak pernah menerima pesan!
+
+**Solusi & Best Practice di MailIDS:**
+1. **Opsi "Simpan Salinan di Mailbox Lokal":**
+   Pada menu **Email Aliases & Forwarding** (`/admin/aliases`), saat membuat alias yang namanya sama dengan user lokal, sistem MailIDS otomatis menambahkan alamat email lokal ke dalam daftar tujuan Postfix (contoh: `admin@perusahaan.co.id, personal@gmail.com`). Dengan ini, email masuk akan sampai di inbox lokal dan sekaligus diteruskan ke alamat eksternal.
+2. **Izin Relay Postfix untuk Alias Eksternal:**
+   Jika email forwarding ke Gmail gagal dengan log `Relay access denied`, pastikan parameter `smtpd_relay_restrictions` di `/etc/postfix/main.cf` mengizinkan pengiriman:
+   ```bash
+   sudo postconf -e "smtpd_relay_restrictions = permit_mynetworks,permit_sasl_authenticated,defer_unauth_destination"
+   sudo systemctl restart postfix
+   ```
+3. **Pengiriman Email Menggunakan Identitas Alias:**
+   Di Webmail Client, dropdown **"Kirim Sebagai (From Address)"** akan otomatis muncul jika mailbox Anda memiliki alias resmi. Anda dapat memilih mengirim atas nama alias atau akun utama secara bebas.
+
+#### B. Pengaturan Lampiran File Dokumen (Attachments)
+MailIDS mendukung pratinjau interaktif dan unduhan riil untuk berbagai dokumen (PDF, Office, Zip, Gambar, teks):
+1. **Hak Akses Folder Penyimpanan Lampiran:**
+   Pastikan folder `storage/app/public/attachments` dapat ditulis oleh web server:
+   ```bash
+   sudo mkdir -p /var/www/mailids/storage/app/public/attachments
+   sudo chown -R www-data:www-data /var/www/mailids/storage/app/public/attachments
+   sudo chmod -R 775 /var/www/mailids/storage/app/public/attachments
+   php artisan storage:link
+   ```
+2. **Pratinjau Langsung & Pengunduhan:**
+   - **File PDF & Gambar (JPG, PNG, WebP, SVG):** Pratinjau langsung interaktif di dalam modal pop-up tanpa perlu keluar halaman.
+   - **File Dokumen Office & Arsip (DOCX, XLSX, ZIP):** Dilengkapi tombol unduh langsung dengan header resmi RFC 6266 `Content-Disposition: attachment`.
+   - **Ukuran Maksimum Upload:** Diatur di `/etc/php/8.3/fpm/php.ini` (`upload_max_filesize = 50M` dan `post_max_size = 50M`).
+
+---
 *Dokumentasi ini 100% mutakhir dan selaras dengan seluruh modul MailIDS yang aktif.*

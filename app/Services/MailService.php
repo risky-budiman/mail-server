@@ -94,8 +94,18 @@ class MailService
                 foreach ($attachments as $att) {
                     if (is_string($att) && file_exists($att)) {
                         $message->attach($att);
-                    } elseif (is_array($att) && !empty($att['path']) && file_exists($att['path'])) {
-                        $message->attach($att['path'], ['as' => $att['name'] ?? basename($att['path'])]);
+                    } elseif (is_array($att)) {
+                        $filePath = null;
+                        if (!empty($att['path']) && file_exists($att['path'])) {
+                            $filePath = $att['path'];
+                        } elseif (!empty($att['storage_path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['storage_path'])) {
+                            $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['storage_path']);
+                        } elseif (!empty($att['path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['path'])) {
+                            $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['path']);
+                        }
+                        if ($filePath && file_exists($filePath)) {
+                            $message->attach($filePath, ['as' => $att['name'] ?? basename($filePath)]);
+                        }
                     } elseif (is_object($att) && method_exists($att, 'getRealPath') && file_exists($att->getRealPath())) {
                         $message->attach($att->getRealPath(), [
                             'as' => method_exists($att, 'getClientOriginalName') ? $att->getClientOriginalName() : basename($att->getRealPath()),
@@ -151,9 +161,15 @@ class MailService
                         if (is_string($att) && file_exists($att)) {
                             $filePath = $att;
                             $fileName = basename($att);
-                        } elseif (is_array($att) && !empty($att['path']) && file_exists($att['path'])) {
-                            $filePath = $att['path'];
-                            $fileName = $att['name'] ?? basename($att['path']);
+                        } elseif (is_array($att)) {
+                            if (!empty($att['path']) && file_exists($att['path'])) {
+                                $filePath = $att['path'];
+                            } elseif (!empty($att['storage_path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['storage_path'])) {
+                                $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['storage_path']);
+                            } elseif (!empty($att['path']) && \Illuminate\Support\Facades\Storage::disk('public')->exists($att['path'])) {
+                                $filePath = \Illuminate\Support\Facades\Storage::disk('public')->path($att['path']);
+                            }
+                            $fileName = $att['name'] ?? basename($filePath ?: 'attachment');
                         } elseif (is_object($att) && method_exists($att, 'getRealPath')) {
                             $filePath = $att->getRealPath();
                             $fileName = method_exists($att, 'getClientOriginalName') ? $att->getClientOriginalName() : basename($filePath);

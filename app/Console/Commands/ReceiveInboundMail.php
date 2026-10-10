@@ -4,7 +4,9 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\VirtualUser;
+use App\Models\VirtualAlias;
 use App\Models\MailboxEmail;
+use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class ReceiveInboundMail extends Command
@@ -13,20 +15,20 @@ class ReceiveInboundMail extends Command
      * The name and signature of the console command.
      * Menerima email mentah dari stdin (Postfix Pipe / MDA)
      */
-    protected $signature = 'mail:receive {recipient?}';
+    protected $signature = 'mail:receive {recipient?} {--raw= : Konten email mentah secara langsung}';
 
     /**
      * The console command description.
      */
-    protected $description = 'Menerima email mentah RFC 822 dari Postfix via STDIN dan menyimpannya langsung ke database MySQL';
+    protected $description = 'Menerima email mentah RFC 822 dari Postfix via STDIN atau argumen --raw dan menyimpannya langsung ke database MySQL';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        // 1. Baca seluruh isi email mentah dari standard input (STDIN)
-        $raw = file_get_contents('php://stdin');
+        // 1. Baca seluruh isi email mentah dari opsi --raw atau standard input (STDIN)
+        $raw = $this->option('raw') ?: @file_get_contents('php://stdin');
         if (empty($raw)) {
             return Command::SUCCESS;
         }
@@ -39,25 +41,24 @@ class ReceiveInboundMail extends Command
         $headerStr = $parts[0] ?? '';
         $body = $parts[1] ?? '';
 
-        $lines = preg_split('/\r\n|\r|\n/', $headerStr);
+        // Unfold headers (gabungkan baris lanjutan RFC 822)
+        $unfoldedHeaderStr = preg_replace('/\r?\n[ \t]+/', ' ', $headerStr);
+        $lines = preg_split('/\r?\n/', $unfoldedHeaderStr);
         $headers = [];
-        $currentKey = '';
 
         foreach ($lines as $line) {
             if (preg_match('/^([a-zA-Z0-9\-]+):\s*(.*)$/', $line, $matches)) {
                 $currentKey = strtolower($matches[1]);
                 $headers[$currentKey] = trim($matches[2]);
-            } elseif ($currentKey && preg_match('/^\s+(.*)$/', $line, $matches)) {
-                $headers[$currentKey] .= ' ' . trim($matches[1]);
             }
         }
 
         // Tentukan alamat penerima
         $toEmail = $this->argument('recipient') ?: ($headers['to'] ?? '');
         if (preg_match('/<([^>]+)>/', $toEmail, $m)) {
-            $toEmail = trim($m[1]);
+            $toEmail = strtolower(trim($m[1]));
         } else {
-            $toEmail = trim($toEmail);
+            $toEmail = strtolower(trim($toEmail));
         }
 
         // Tentukan pengirim
@@ -66,18 +67,18 @@ class ReceiveInboundMail extends Command
         if (!empty($headers['from'])) {
             $fromRaw = $headers['from'];
             if (preg_match('/^(.*?)\s*<([^>]+)>/', $fromRaw, $m)) {
-                $fromName = trim(trim($m[1]), '"\'');
-                $fromEmail = trim($m[2]);
+                $fromName = $this->decodeMimeString(trim(trim($m[1]), '"\''));
+                $fromEmail = strtolower(trim($m[2]));
             } else {
-                $fromEmail = trim($fromRaw);
+                $fromEmail = strtolower(trim($fromRaw));
                 $fromName = $fromEmail;
             }
         }
 
-        // Subjek
+        // Subjek dengan decode MIME lengkap (RFC 2047)
         $subject = '(Tanpa Subjek)';
         if (!empty($headers['subject'])) {
-            $subject = mb_decode_mimeheader($headers['subject']);
+            $subject = $this->decodeMimeString($headers['subject']);
         }
 
         // Tanggal
@@ -88,35 +89,74 @@ class ReceiveInboundMail extends Command
             } catch (\Throwable $e) {}
         }
 
-        // Cari user pemilik mailbox di database
-        $user = VirtualUser::where('email', $toEmail)->where('is_active', true)->first();
-        if (!$user) {
-            // Coba cari dari alias jika ada
-            $alias = \App\Models\VirtualAlias::where('source_email', $toEmail)->where('is_active', true)->first();
-            if ($alias) {
-                $user = VirtualUser::where('email', $alias->destination_email)->where('is_active', true)->first();
+        // 2. Kumpulkan seluruh akun mailbox lokal yang menjadi penerima (mendukung multi-alias & direct mailbox)
+        $targetUserIds = [];
+        
+        // Cek jika penerima adalah akun mailbox langsung
+        $directUser = VirtualUser::where('email', $toEmail)->where('is_active', true)->first();
+        if ($directUser) {
+            $targetUserIds[] = $directUser->id;
+        }
+
+        // Cek jika penerima adalah alias yang diarahkan ke akun lokal
+        $aliases = VirtualAlias::where('source_email', $toEmail)->where('is_active', true)->get();
+        foreach ($aliases as $al) {
+            // Destination bisa berupa satu email atau beberapa email terpisah koma
+            $destinations = array_filter(array_map('trim', explode(',', $al->destination_email)));
+            foreach ($destinations as $dest) {
+                $matchedUser = VirtualUser::where('email', strtolower($dest))->where('is_active', true)->first();
+                if ($matchedUser && !in_array($matchedUser->id, $targetUserIds)) {
+                    $targetUserIds[] = $matchedUser->id;
+                }
             }
         }
 
+        // Ekstraksi MIME Body dan Lampiran
         $extracted = $this->parseMimeBodyAndAttachments($headerStr, $body);
 
-        if ($user) {
+        // Simpan email ke setiap akun mailbox penerima yang valid
+        foreach ($targetUserIds as $uId) {
+            $user = VirtualUser::find($uId);
+            if (!$user) continue;
+
+            // Salin lampiran ke folder khusus user jika diperlukan
+            $userAttachments = $extracted['attachments'];
+
             MailboxEmail::create([
                 'virtual_user_id' => $user->id,
                 'folder' => 'inbox',
                 'from_name' => $fromName ?: 'Sender',
                 'from_email' => $fromEmail ?: 'unknown@domain.com',
-                'to' => $user->email,
+                'to' => $toEmail ?: $user->email,
                 'subject' => $subject,
                 'date_human' => $dateHuman,
                 'is_read' => false,
                 'is_starred' => false,
                 'body' => $extracted['body'],
-                'attachments' => $extracted['attachments'],
+                'attachments' => $userAttachments,
             ]);
+
+            // Sinkronkan kapasitas disk usage
+            $actualBytes = strlen($extracted['body']);
+            foreach ($userAttachments as $ua) {
+                $actualBytes += ($ua['bytes'] ?? 150000);
+            }
+            $user->syncMaildirDiskUsage($actualBytes);
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Decode MIME RFC 2047 string (Q-encoding & B-encoding)
+     */
+    protected function decodeMimeString(string $string): string
+    {
+        $decoded = iconv_mime_decode($string, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
+        if ($decoded !== false && !empty($decoded)) {
+            return $decoded;
+        }
+        return mb_decode_mimeheader($string) ?: $string;
     }
 
     /**
@@ -150,28 +190,29 @@ class ReceiveInboundMail extends Command
                 $partHeader = $sub[0] ?? '';
                 $partContent = $sub[1] ?? '';
 
-                // Periksa apakah ini lampiran file (attachment / inline file)
-                $filename = null;
-                if (preg_match('/filename\*?=["\']?(?:UTF-8\'\')?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
-                    $filename = urldecode(trim($fnMatch[1]));
-                } elseif (preg_match('/name=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
-                    $filename = trim($fnMatch[1]);
-                }
+                // Ekstrak nama file lampiran dengan dukungan RFC 2231 / RFC 2047
+                $filename = $this->extractFilenameFromPartHeader($partHeader);
 
                 if ($filename) {
-                    // Simpan file lampiran fisik ke storage publik
-                    $cleanFileBase = preg_replace('/\s+/', '', $partContent);
-                    $fileData = base64_decode($cleanFileBase);
-                    if ($fileData !== false) {
-                        $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $filename);
+                    $fileData = $this->decodePartContent($partHeader, $partContent);
+                    if ($fileData !== false && strlen($fileData) > 0) {
+                        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'dat');
+                        $safeName = time() . '_' . bin2hex(random_bytes(4)) . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $filename);
                         $storagePath = 'attachments/' . $safeName;
-                        @\Illuminate\Support\Facades\Storage::disk('public')->put($storagePath, $fileData);
+                        
+                        Storage::disk('public')->put($storagePath, $fileData);
 
-                        $sizeKb = round(strlen($fileData) / 1024, 1);
+                        $sizeBytes = strlen($fileData);
+                        $sizeKb = round($sizeBytes / 1024, 1);
+                        $formattedSize = $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB';
+
                         $attachments[] = [
                             'name' => $filename,
-                            'size' => $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB',
-                            'url' => \Illuminate\Support\Facades\Storage::url($storagePath),
+                            'size' => $formattedSize,
+                            'ext'  => $ext,
+                            'path' => $storagePath,
+                            'url'  => Storage::url($storagePath),
+                            'bytes' => $sizeBytes,
                         ];
                     }
                     continue;
@@ -190,28 +231,68 @@ class ReceiveInboundMail extends Command
                 }
 
                 // Dekode konten teks/HTML
-                if (stripos($partHeader, 'base64') !== false) {
-                    $decoded = base64_decode(preg_replace('/\s+/', '', $partContent));
-                    if ($decoded !== false) $partContent = $decoded;
-                } elseif (stripos($partHeader, 'quoted-printable') !== false) {
-                    $partContent = quoted_printable_decode($partContent);
-                }
+                $decodedContent = $this->decodePartContent($partHeader, $partContent);
 
                 if (stripos($partHeader, 'text/html') !== false) {
-                    $htmlPart = trim($partContent);
+                    $htmlPart = trim($decodedContent);
                 } elseif (stripos($partHeader, 'text/plain') !== false && empty($textPart)) {
-                    $textPart = trim($partContent);
+                    $textPart = trim($decodedContent);
                 }
             }
         }
 
         $finalBody = !empty($htmlPart) ? $htmlPart : (!empty($textPart) ? $textPart : $body);
-        // Bersihkan sisa boundary jika ada
         $finalBody = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $finalBody);
 
         return [
             'body' => trim($finalBody),
             'attachments' => $attachments,
         ];
+    }
+
+    /**
+     * Ekstrak nama file lampiran dari MIME header part
+     */
+    protected function extractFilenameFromPartHeader(string $header): ?string
+    {
+        $filename = null;
+
+        // RFC 2231 / RFC 5987: filename*=UTF-8''...
+        if (preg_match('/filename\*=(?:[a-zA-Z0-9_\-]+\'\')?([^;\r\n]+)/i', $header, $m)) {
+            $filename = urldecode(trim(trim($m[1]), '"\''));
+        }
+        // Standar filename="..." atau filename=...
+        elseif (preg_match('/filename=["\']?([^"\'\r\n;]+)["\']?/i', $header, $m)) {
+            $filename = trim($m[1]);
+        }
+        // Standar name="..." atau name=...
+        elseif (preg_match('/name=["\']?([^"\'\r\n;]+)["\']?/i', $header, $m)) {
+            $filename = trim($m[1]);
+        }
+
+        if ($filename) {
+            $filename = $this->decodeMimeString($filename);
+            return basename($filename);
+        }
+
+        return null;
+    }
+
+    /**
+     * Dekode konten part sesuai Content-Transfer-Encoding
+     */
+    protected function decodePartContent(string $header, string $content): string
+    {
+        if (stripos($header, 'Content-Transfer-Encoding: base64') !== false) {
+            $cleaned = preg_replace('/\s+/', '', $content);
+            $decoded = base64_decode($cleaned);
+            return ($decoded !== false) ? $decoded : $content;
+        }
+
+        if (stripos($header, 'Content-Transfer-Encoding: quoted-printable') !== false) {
+            return quoted_printable_decode($content);
+        }
+
+        return $content;
     }
 }

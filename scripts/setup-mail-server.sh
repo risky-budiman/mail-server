@@ -93,6 +93,14 @@ postconf -e "smtpd_sasl_type = dovecot"
 postconf -e "smtpd_sasl_path = private/auth"
 postconf -e "smtpd_sasl_auth_enable = yes"
 postconf -e "smtpd_recipient_restrictions = permit_sasl_authenticated,permit_mynetworks,reject_unauth_destination"
+postconf -e "smtpd_relay_restrictions = permit_mynetworks,permit_sasl_authenticated,defer_unauth_destination"
+postconf -e "alias_maps = hash:/etc/aliases"
+postconf -e "alias_database = hash:/etc/aliases"
+
+# Aktifkan port SMTP Submission (587) dan SMTPS (465) di master.cf
+sed -i -E 's/^#?(submission\s+inet\s+n\s+-\s+y\s+-\s+-\s+smtpd)/\1/' /etc/postfix/master.cf
+sed -i -E 's/^#?(submissions\s+inet\s+n\s+-\s+y\s+-\s+-\s+smtpd)/\1/' /etc/postfix/master.cf
+sed -i -E 's/^#?(smtps\s+inet\s+n\s+-\s+y\s+-\s+-\s+smtpd)/\1/' /etc/postfix/master.cf
 
 # Batas Ukuran Pesan & Lampiran Email (Default 50 MB)
 postconf -e "message_size_limit = 52428800"

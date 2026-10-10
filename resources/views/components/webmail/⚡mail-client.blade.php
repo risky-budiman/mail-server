@@ -30,6 +30,7 @@ new class extends Component
 
     // Compose state
     public $composeTo = '';
+    public $composeFrom = ''; // Akun utama atau alias yang dipilih
     public $composeCc = '';
     public $composeBcc = '';
     public $showCcBcc = false;
@@ -37,10 +38,12 @@ new class extends Component
     public $composeBody = '';
     public $attachments = [];
     public $editingDraftId = null; // ID draft jika sedang mengedit draft yang ada
+    public $availableAliases = []; // Daftar alias yang terhubung ke akun mailbox ini
 
     // Quick Reply inline state (Balas Cepat / Teruskan Langsung di Bawah Email)
     public $inlineReplyMode = 'reply'; // 'reply' or 'forward'
     public $showInlineReply = false;
+    public $quickReplyFrom = ''; // Alamat pengirim untuk balasan (bisa alias)
     public $quickReplyTo = '';
     public $quickReplyCc = '';
     public $quickReplyBcc = '';
@@ -149,6 +152,30 @@ new class extends Component
                 $this->syncFromMaildir($user);
                 cache()->put($lastSyncKey, true, now()->addMinutes(2));
             }
+
+            // 3. Muat daftar alias yang diarahkan ke akun mailbox ini
+            $this->loadAvailableAliases($user);
+        }
+    }
+
+    protected function loadAvailableAliases(?VirtualUser $user)
+    {
+        if (!$user) return;
+        $this->availableAliases = \App\Models\VirtualAlias::where('is_active', true)
+            ->where(function($q) use ($user) {
+                $q->where('destination_email', $user->email)
+                  ->orWhere('destination_email', 'like', "%{$user->email}%");
+            })
+            ->pluck('source_email')
+            ->unique()
+            ->values()
+            ->toArray();
+
+        if (empty($this->composeFrom)) {
+            $this->composeFrom = $user->email;
+        }
+        if (empty($this->quickReplyFrom)) {
+            $this->quickReplyFrom = $user->email;
         }
     }
 
@@ -250,7 +277,7 @@ new class extends Component
     /**
      * Parser sederhana email mentah RFC 822 (headers + body)
      */
-    protected function parseRawRfc822Email(string $raw): array
+    protected function parseRawRfc822Email(string $raw, ?int $userId = null): array
     {
         $parts = explode("\r\n\r\n", $raw, 2);
         if (count($parts) < 2) {
@@ -262,30 +289,37 @@ new class extends Component
 
         $fromName = '';
         $fromEmail = '';
+        $toEmail = '';
         $subject = '(Tanpa Subjek)';
         $date = '';
 
-        $lines = preg_split('/\r\n|\r|\n/', $headerStr);
+        $unfoldedHeaderStr = preg_replace('/\r?\n[ \t]+/', ' ', $headerStr);
+        $lines = preg_split('/\r?\n/', $unfoldedHeaderStr);
         $headers = [];
-        $currentKey = '';
 
         foreach ($lines as $line) {
             if (preg_match('/^([a-zA-Z0-9\-]+):\s*(.*)$/', $line, $matches)) {
                 $currentKey = strtolower($matches[1]);
                 $headers[$currentKey] = trim($matches[2]);
-            } elseif ($currentKey && preg_match('/^\s+(.*)$/', $line, $matches)) {
-                $headers[$currentKey] .= ' ' . trim($matches[1]);
             }
         }
 
         if (!empty($headers['from'])) {
             $fromRaw = $headers['from'];
             if (preg_match('/^(.*?)\s*<([^>]+)>/', $fromRaw, $m)) {
-                $fromName = trim(trim($m[1]), '"\'');
-                $fromEmail = trim($m[2]);
+                $fromName = $this->decodeMimeHeader(trim(trim($m[1]), '"\''));
+                $fromEmail = strtolower(trim($m[2]));
             } else {
-                $fromEmail = trim($fromRaw);
+                $fromEmail = strtolower(trim($fromRaw));
                 $fromName = $fromEmail;
+            }
+        }
+
+        if (!empty($headers['to'])) {
+            if (preg_match('/<([^>]+)>/', $headers['to'], $m)) {
+                $toEmail = strtolower(trim($m[1]));
+            } else {
+                $toEmail = strtolower(trim($headers['to']));
             }
         }
 
@@ -302,11 +336,12 @@ new class extends Component
         }
 
         // Tangani MIME Multipart & Ekstraksi File Lampiran Fisik ke Folder Storage
-        $extracted = $this->extractCleanMimeAndAttachments($headerStr, $body);
+        $extracted = $this->extractCleanMimeAndAttachments($headerStr, $body, $userId);
 
         return [
             'from_name' => $fromName,
             'from_email' => $fromEmail,
+            'to' => $toEmail,
             'subject' => $subject,
             'date' => $date,
             'body' => $extracted['body'],
@@ -317,7 +352,7 @@ new class extends Component
     /**
      * Ekstraksi teks/HTML dan simpan file lampiran fisik ke folder storage (hanya metadata di database)
      */
-    protected function extractCleanMimeAndAttachments(string $headers, string $body): array
+    protected function extractCleanMimeAndAttachments(string $headers, string $body, ?int $userId = null): array
     {
         $attachments = [];
         $htmlPart = null;
@@ -345,26 +380,47 @@ new class extends Component
                 $partContent = $sub[1] ?? '';
 
                 $filename = null;
-                if (preg_match('/filename\*?=["\']?(?:UTF-8\'\')?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
-                    $filename = urldecode(trim($fnMatch[1]));
-                } elseif (preg_match('/name=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $fnMatch)) {
-                    $filename = trim($fnMatch[1]);
+                // RFC 2231 / RFC 5987: filename*=UTF-8''...
+                if (preg_match('/filename\*=(?:[a-zA-Z0-9_\-]+\'\')?([^;\r\n]+)/i', $partHeader, $m)) {
+                    $filename = urldecode(trim(trim($m[1]), '"\''));
+                } elseif (preg_match('/filename=["\']?([^"\'\r\n;]+)["\']?/i', $partHeader, $m)) {
+                    $filename = trim($m[1]);
+                } elseif (preg_match('/name=["\']?([^"\'\r\n;]+)["\']?/i', $partHeader, $m)) {
+                    $filename = trim($m[1]);
                 }
 
                 if ($filename) {
-                    // Simpan file fisik ke folder storage, BUKAN ke database
-                    $cleanFileBase = preg_replace('/\s+/', '', $partContent);
-                    $fileData = base64_decode($cleanFileBase);
-                    if ($fileData !== false) {
-                        $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $filename);
-                        $storagePath = 'attachments/' . $safeName;
-                        @\Illuminate\Support\Facades\Storage::disk('public')->put($storagePath, $fileData);
+                    $filename = basename($this->decodeMimeHeader($filename));
+                    $decodedFile = $partContent;
+                    if (stripos($partHeader, 'Content-Transfer-Encoding: base64') !== false) {
+                        $cleanBase = preg_replace('/\s+/', '', $partContent);
+                        $decoded = base64_decode($cleanBase);
+                        if ($decoded !== false) $decodedFile = $decoded;
+                    } elseif (stripos($partHeader, 'Content-Transfer-Encoding: quoted-printable') !== false) {
+                        $decodedFile = quoted_printable_decode($partContent);
+                    }
 
-                        $sizeKb = round(strlen($fileData) / 1024, 1);
+                    if ($decodedFile !== false && strlen($decodedFile) > 0) {
+                        $uFolder = $userId ? "attachments/{$userId}" : 'attachments';
+                        \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory($uFolder);
+
+                        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION) ?: 'dat');
+                        $safeName = time() . '_' . bin2hex(random_bytes(4)) . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $filename);
+                        $storagePath = $uFolder . '/' . $safeName;
+
+                        \Illuminate\Support\Facades\Storage::disk('public')->put($storagePath, $decodedFile);
+
+                        $sizeBytes = strlen($decodedFile);
+                        $sizeKb = round($sizeBytes / 1024, 1);
+                        $formattedSize = $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB';
+
                         $attachments[] = [
                             'name' => $filename,
-                            'size' => $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB',
-                            'url' => \Illuminate\Support\Facades\Storage::url($storagePath),
+                            'size' => $formattedSize,
+                            'ext'  => $ext,
+                            'path' => $storagePath,
+                            'url'  => \Illuminate\Support\Facades\Storage::url($storagePath),
+                            'bytes' => $sizeBytes,
                         ];
                     }
                     continue;
@@ -372,23 +428,25 @@ new class extends Component
 
                 // Cek recursive multipart
                 if (preg_match('/boundary=["\']?([^"\';\r\n]+)["\']?/i', $partHeader, $innerBMatch)) {
-                    $innerRes = $this->extractCleanMimeAndAttachments($partHeader, $partContent);
+                    $innerRes = $this->extractCleanMimeAndAttachments($partHeader, $partContent, $userId);
                     if (!empty($innerRes['body'])) $htmlPart = $innerRes['body'];
                     if (!empty($innerRes['attachments'])) $attachments = array_merge($attachments, $innerRes['attachments']);
                     continue;
                 }
 
+                $decodedPart = $partContent;
                 if (stripos($partHeader, 'base64') !== false) {
-                    $decoded = base64_decode(preg_replace('/\s+/', '', $partContent));
-                    if ($decoded !== false) $partContent = $decoded;
+                    $cleanBase = preg_replace('/\s+/', '', $partContent);
+                    $decoded = base64_decode($cleanBase);
+                    if ($decoded !== false) $decodedPart = $decoded;
                 } elseif (stripos($partHeader, 'quoted-printable') !== false) {
-                    $partContent = quoted_printable_decode($partContent);
+                    $decodedPart = quoted_printable_decode($partContent);
                 }
 
                 if (stripos($partHeader, 'text/html') !== false) {
-                    $htmlPart = trim($partContent);
+                    $htmlPart = trim($decodedPart);
                 } elseif (stripos($partHeader, 'text/plain') !== false && empty($textPart)) {
-                    $textPart = trim($partContent);
+                    $textPart = trim($decodedPart);
                 }
             }
         }
@@ -991,10 +1049,31 @@ new class extends Component
         $user = $this->getAccount();
         if (!$user) return;
 
-        $attachmentNames = [];
+        $savedAttachments = [];
         if (!empty($this->attachments)) {
+            $uFolder = "attachments/{$user->id}";
+            \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory($uFolder);
             foreach ($this->attachments as $file) {
-                $attachmentNames[] = $file->getClientOriginalName();
+                if (is_object($file) && method_exists($file, 'getClientOriginalName')) {
+                    $origName = $file->getClientOriginalName();
+                    $ext = strtolower($file->getClientOriginalExtension() ?: 'dat');
+                    $sizeBytes = $file->getSize() ?: 0;
+                    $sizeKb = round($sizeBytes / 1024, 1);
+                    $formattedSize = $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB';
+                    $safeName = time() . '_' . bin2hex(random_bytes(4)) . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $origName);
+                    $storagePath = $file->storeAs($uFolder, $safeName, 'public');
+
+                    $savedAttachments[] = [
+                        'name' => $origName,
+                        'size' => $formattedSize,
+                        'ext'  => $ext,
+                        'path' => $storagePath,
+                        'url'  => \Illuminate\Support\Facades\Storage::url($storagePath),
+                        'bytes' => $sizeBytes,
+                    ];
+                } elseif (is_array($file)) {
+                    $savedAttachments[] = $file;
+                }
             }
         }
 
@@ -1009,7 +1088,7 @@ new class extends Component
                     'subject' => $subject,
                     'body' => $body,
                     'date_human' => 'Hari ini, ' . date('H:i'),
-                    'attachments' => $attachmentNames,
+                    'attachments' => $savedAttachments,
                 ]);
         } else {
             $created = MailboxEmail::create([
@@ -1023,7 +1102,7 @@ new class extends Component
                 'is_read' => true,
                 'is_starred' => false,
                 'body' => $body,
-                'attachments' => $attachmentNames,
+                'attachments' => $savedAttachments,
             ]);
             $this->editingDraftId = $created->id;
         }
@@ -1071,15 +1150,36 @@ new class extends Component
                 ->delete();
         }
 
-        $attachmentNames = [];
+        $savedAttachments = [];
         if (!empty($this->attachments)) {
+            $uFolder = "attachments/{$user->id}";
+            \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory($uFolder);
             foreach ($this->attachments as $file) {
-                $attachmentNames[] = $file->getClientOriginalName();
+                if (is_object($file) && method_exists($file, 'getClientOriginalName')) {
+                    $origName = $file->getClientOriginalName();
+                    $ext = strtolower($file->getClientOriginalExtension() ?: 'dat');
+                    $sizeBytes = $file->getSize() ?: 0;
+                    $sizeKb = round($sizeBytes / 1024, 1);
+                    $formattedSize = $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB';
+                    $safeName = time() . '_' . bin2hex(random_bytes(4)) . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $origName);
+                    $storagePath = $file->storeAs($uFolder, $safeName, 'public');
+
+                    $savedAttachments[] = [
+                        'name' => $origName,
+                        'size' => $formattedSize,
+                        'ext'  => $ext,
+                        'path' => $storagePath,
+                        'url'  => \Illuminate\Support\Facades\Storage::url($storagePath),
+                        'bytes' => $sizeBytes,
+                    ];
+                } elseif (is_array($file)) {
+                    $savedAttachments[] = $file;
+                }
             }
         }
 
-        // Kirim fisik email keluar via Postfix SMTP / Sendmail
-        $fromEmail = $user->email ?: 'admin@perusahaan.net.id';
+        // Kirim fisik email keluar via Postfix SMTP / Sendmail (mendukung alias sender)
+        $fromEmail = !empty($this->composeFrom) ? $this->composeFrom : ($user->email ?: 'admin@perusahaan.net.id');
         $fromName = $user->name ?: 'Administrator';
         \App\Services\MailService::sendOutboundMail(
             $fromEmail,
@@ -1087,7 +1187,7 @@ new class extends Component
             $this->composeTo,
             $this->composeSubject,
             $this->composeBody,
-            $this->attachments ?? []
+            $savedAttachments
         );
 
         MailboxEmail::create([
@@ -1101,7 +1201,7 @@ new class extends Component
             'is_read' => true,
             'is_starred' => false,
             'body' => $this->composeBody,
-            'attachments' => $attachmentNames,
+            'attachments' => $savedAttachments,
         ]);
 
         $actualBytes = $this->calculateActualEmailsBytes();
@@ -1135,14 +1235,35 @@ new class extends Component
             $flashMessage = 'Balasan berhasil dikirim!';
         }
 
-        $attachmentNames = [];
+        $savedAttachments = [];
         if (!empty($this->quickReplyAttachments)) {
+            $uFolder = "attachments/{$user->id}";
+            \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory($uFolder);
             foreach ($this->quickReplyAttachments as $file) {
-                $attachmentNames[] = $file->getClientOriginalName();
+                if (is_object($file) && method_exists($file, 'getClientOriginalName')) {
+                    $origName = $file->getClientOriginalName();
+                    $ext = strtolower($file->getClientOriginalExtension() ?: 'dat');
+                    $sizeBytes = $file->getSize() ?: 0;
+                    $sizeKb = round($sizeBytes / 1024, 1);
+                    $formattedSize = $sizeKb > 1024 ? round($sizeKb / 1024, 1) . ' MB' : $sizeKb . ' KB';
+                    $safeName = time() . '_' . bin2hex(random_bytes(4)) . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '_', $origName);
+                    $storagePath = $file->storeAs($uFolder, $safeName, 'public');
+
+                    $savedAttachments[] = [
+                        'name' => $origName,
+                        'size' => $formattedSize,
+                        'ext'  => $ext,
+                        'path' => $storagePath,
+                        'url'  => \Illuminate\Support\Facades\Storage::url($storagePath),
+                        'bytes' => $sizeBytes,
+                    ];
+                } elseif (is_array($file)) {
+                    $savedAttachments[] = $file;
+                }
             }
         }
 
-        $fromEmail = $user->email ?: 'admin@perusahaan.net.id';
+        $fromEmail = !empty($this->quickReplyFrom) ? $this->quickReplyFrom : ($user->email ?: 'admin@perusahaan.net.id');
         $fromName = $user->name ?: 'Administrator';
         \App\Services\MailService::sendOutboundMail(
             $fromEmail,
@@ -1150,7 +1271,7 @@ new class extends Component
             $recipient,
             $subject,
             $this->quickReplyText,
-            $this->quickReplyAttachments ?? []
+            $savedAttachments
         );
 
         MailboxEmail::create([
@@ -1164,7 +1285,7 @@ new class extends Component
             'is_read' => true,
             'is_starred' => false,
             'body' => $this->quickReplyText,
-            'attachments' => $attachmentNames,
+            'attachments' => $savedAttachments,
         ]);
 
         $actualBytes = $this->calculateActualEmailsBytes();
@@ -1413,6 +1534,7 @@ new class extends Component
             'selectedEmail' => $selectedEmail,
             'threadEmails' => $threadEmails,
             'counts' => $counts,
+            'currentAccount' => $user,
         ])->layout('layouts.webmail', ['title' => 'Webmail Client - MailIDS']);
     }
 };
@@ -1924,8 +2046,14 @@ new class extends Component
                             
                             <!-- To Me Dropdown -->
                             <div class="flex items-center gap-1.5 text-xs text-slate-400">
-                                <button @click="showHeaderDetails = !showHeaderDetails" class="hover:text-slate-200 flex items-center gap-1 font-medium transition-colors">
+                                <button @click="showHeaderDetails = !showHeaderDetails" class="hover:text-slate-200 flex items-center gap-1.5 font-medium transition-colors">
                                     <span>to me</span>
+                                    @if(!empty($selectedEmail['to']) && $selectedEmail['to'] !== ($currentAccount->email ?? ''))
+                                        <span class="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-medium flex items-center gap-1" title="Diterima via alias alamat email: {{ $selectedEmail['to'] }}">
+                                            <i data-lucide="split" class="w-2.5 h-2.5"></i>
+                                            <span>via alias: {{ $selectedEmail['to'] }}</span>
+                                        </span>
+                                    @endif
                                     <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
                                 </button>
                             </div>
@@ -1955,9 +2083,11 @@ new class extends Component
                                 <i data-lucide="more-vertical" class="w-4 h-4"></i>
                             </button>
                         </div>
-                                    <!-- Hostinger Attachments Pills / Badges & Live Preview Modal -->
+                    </div>
+
+                    <!-- Hostinger Attachments Pills / Badges & Live Preview Modal -->
                     @if(!empty($selectedEmail['attachments']))
-                    <div class="space-y-3 pt-2 pb-4 border-b border-slate-800/80" x-data="{ previewUrl: null, previewName: '', previewType: '' }">
+                    <div class="space-y-3 pt-2 pb-4 border-b border-slate-800/80" x-data="{ previewUrl: null, previewName: '', previewType: '', downloadUrl: null }">
                         <div class="flex flex-wrap items-center gap-3">
                             @foreach($selectedEmail['attachments'] as $att)
                             @php
@@ -1966,9 +2096,10 @@ new class extends Component
                                 $size = $isObject ? ($att['size'] ?? '1 MB') : '1.2 MB';
                                 $ext = $isObject ? ($att['ext'] ?? pathinfo($name, PATHINFO_EXTENSION)) : pathinfo($name, PATHINFO_EXTENSION);
                                 $extLower = strtolower($ext ?: 'dat');
-                                $fileUrl = $isObject ? ($att['url'] ?? (!empty($att['path']) ? asset('storage/' . $att['path']) : null)) : null;
                                 $isImage = in_array($extLower, ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']);
                                 $isPdf = ($extLower === 'pdf');
+                                $previewRoute = route('webmail.attachment.preview', ['email' => $selectedEmail['id'], 'index' => $loop->index]);
+                                $downloadRoute = route('webmail.attachment.download', ['email' => $selectedEmail['id'], 'index' => $loop->index]);
                             @endphp
                             <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900 border border-slate-700/80 hover:border-slate-600 shadow-sm transition-all group">
                                 <!-- Badge Icon Sesuai Ekstensi File -->
@@ -1986,30 +2117,20 @@ new class extends Component
 
                                 <!-- Action Buttons: Preview & Download -->
                                 <div class="flex items-center gap-1 ml-1">
-                                    @if($fileUrl && ($isImage || $isPdf))
-                                        <!-- Tombol Preview Langsung -->
-                                        <button type="button" 
-                                                @click="previewUrl = '{{ $fileUrl }}'; previewName = '{{ addslashes($name) }}'; previewType = '{{ $isImage ? 'image' : 'pdf' }}'"
-                                                class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
-                                                title="Lihat Pratinjau (Preview) {{ $name }}">
-                                            <i data-lucide="eye" class="w-4 h-4"></i>
-                                        </button>
-                                    @endif
+                                    <!-- Tombol Preview Interaktif -->
+                                    <button type="button" 
+                                            @click="previewUrl = '{{ $previewRoute }}'; previewName = '{{ addslashes($name) }}'; previewType = '{{ $isImage ? 'image' : ($isPdf ? 'pdf' : 'generic') }}'; downloadUrl = '{{ $downloadRoute }}'"
+                                            class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors" 
+                                            title="Lihat Pratinjau {{ $name }}">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                    </button>
 
-                                    @if($fileUrl)
-                                        <a href="{{ $fileUrl }}" download="{{ $name }}" target="_blank"
-                                           class="p-1.5 rounded-lg text-slate-400 hover:text-emerald-300 hover:bg-slate-800 transition-colors" 
-                                           title="Unduh {{ $name }}">
-                                            <i data-lucide="download" class="w-4 h-4"></i>
-                                        </a>
-                                    @else
-                                        <button type="button" 
-                                                onclick="alert('Mengunduh dokumen: {{ $name }}')"
-                                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" 
-                                                title="Unduh {{ $name }}">
-                                            <i data-lucide="download" class="w-4 h-4"></i>
-                                        </button>
-                                    @endif
+                                    <!-- Tombol Unduh Riil (Content-Disposition: attachment) -->
+                                    <a href="{{ $downloadRoute }}" download="{{ $name }}"
+                                       class="p-1.5 rounded-lg text-slate-400 hover:text-emerald-300 hover:bg-slate-800 transition-colors" 
+                                       title="Unduh Dokumen {{ $name }}">
+                                        <i data-lucide="download" class="w-4 h-4"></i>
+                                    </a>
                                 </div>
                             </div>
                             @endforeach
@@ -2017,21 +2138,21 @@ new class extends Component
 
                         <!-- Modal Popup Preview Gambar & Dokumen Interaktif -->
                         <div x-show="previewUrl" x-cloak
-                             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+                             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md"
                              @keydown.escape.window="previewUrl = null" style="display: none;">
                             <div class="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col"
                                  @click.away="previewUrl = null">
                                 <!-- Modal Header -->
-                                <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between gap-3">
+                                <div class="px-5 py-3.5 border-b border-slate-800 bg-slate-950/90 flex items-center justify-between gap-3">
                                     <div class="flex items-center gap-2 truncate">
-                                        <i data-lucide="file" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+                                        <i data-lucide="file-check" class="w-4 h-4 text-cyan-400 shrink-0"></i>
                                         <span class="text-xs sm:text-sm font-bold text-white truncate" x-text="previewName"></span>
                                     </div>
                                     <div class="flex items-center gap-2 shrink-0">
-                                        <a :href="previewUrl" :download="previewName" target="_blank"
+                                        <a :href="downloadUrl || previewUrl" :download="previewName"
                                            class="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm">
                                             <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                                            <span>Unduh</span>
+                                            <span>Unduh Dokumen</span>
                                         </a>
                                         <button type="button" @click="previewUrl = null" 
                                                 class="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors">
@@ -2039,13 +2160,29 @@ new class extends Component
                                         </button>
                                     </div>
                                 </div>
-                                <!-- Modal Body: Image or PDF Iframe -->
-                                <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950/60 min-h-[300px]">
+                                <!-- Modal Body: Image or PDF Iframe or Generic Document Card -->
+                                <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950/70 min-h-[350px]">
                                     <template x-if="previewType === 'image'">
                                         <img :src="previewUrl" :alt="previewName" class="max-w-full max-h-[75vh] object-contain rounded-xl shadow-lg border border-slate-800">
                                     </template>
                                     <template x-if="previewType === 'pdf'">
                                         <iframe :src="previewUrl" class="w-full h-[75vh] rounded-xl border border-slate-800"></iframe>
+                                    </template>
+                                    <template x-if="previewType !== 'image' && previewType !== 'pdf'">
+                                        <div class="text-center p-8 space-y-4">
+                                            <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-cyan-400 shadow-inner">
+                                                <i data-lucide="file-text" class="w-8 h-8"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-white font-bold text-base" x-text="previewName"></h4>
+                                                <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Pratinjau langsung di dalam browser terbatas untuk tipe dokumen ini. Silakan unduh dokumen untuk membuka di aplikasi komputer Anda.</p>
+                                            </div>
+                                            <a :href="downloadUrl || previewUrl" :download="previewName"
+                                               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-lg shadow-cyan-600/30">
+                                                <i data-lucide="download" class="w-4 h-4"></i>
+                                                <span>Unduh File Lengkap</span>
+                                            </a>
+                                        </div>
                                     </template>
                                 </div>
                             </div>
@@ -2221,6 +2358,21 @@ new class extends Component
                         </div>
                         @endif
 
+                        <!-- Pilihan Pengirim (Akun Utama atau Alias) -->
+                        @if(!empty($availableAliases) && count($availableAliases) > 0)
+                        <div class="flex items-center gap-2 text-xs py-1 px-1 bg-slate-950/40 rounded-xl border border-slate-800/50">
+                            <span class="text-slate-400 font-medium shrink-0 text-[11px] pl-1">Balas sebagai:</span>
+                            <select wire:model="quickReplyFrom" class="bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-cyan-300 font-semibold px-2.5 py-1 focus:outline-none focus:border-cyan-500 shadow-sm">
+                                <option value="{{ $currentAccount->email ?? '' }}">{{ $currentAccount->email ?? '' }} (Utama)</option>
+                                @foreach($availableAliases as $alias)
+                                    @if($alias !== ($currentAccount->email ?? ''))
+                                        <option value="{{ $alias }}">{{ $alias }} (Alias)</option>
+                                    @endif
+                                @endforeach
+                            </select>
+                        </div>
+                        @endif
+
                         <!-- Textarea Area -->
                         <div class="relative">
                             <textarea wire:model="quickReplyText" 
@@ -2381,6 +2533,24 @@ new class extends Component
             <!-- Form Content with Scrollable Body & Sticky Footer -->
             <form wire:submit="sendEmail" class="flex-1 min-h-0 flex flex-col overflow-hidden">
                 <div class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 custom-scrollbar">
+                    @if(!empty($availableAliases) && count($availableAliases) > 0)
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                            <span>Kirim Sebagai (From Address)</span>
+                            <span class="text-[10px] text-cyan-400 font-mono font-medium">Akun / Alias</span>
+                        </label>
+                        <select wire:model="composeFrom" 
+                                class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
+                            <option value="{{ $currentAccount->email ?? '' }}">{{ $currentAccount->email ?? '' }} (Akun Utama)</option>
+                            @foreach($availableAliases as $alias)
+                                @if($alias !== ($currentAccount->email ?? ''))
+                                    <option value="{{ $alias }}">{{ $alias }} (Alias Resmi)</option>
+                                @endif
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
                             <label class="block text-xs font-bold text-slate-300">Kepada (To)</label>
