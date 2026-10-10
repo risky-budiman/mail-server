@@ -1773,36 +1773,10 @@ new class extends Component
                     </span>
                 </div>
             </div>
-
-            <!-- Active Folder / Menu Badge (Desktop / Tablet) -->
-            <div class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 font-medium ml-1">
-                <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : ($activeFolder === 'contacts' ? 'users' : 'folder'))))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
-                <span class="text-slate-400">{{ $activeFolder === 'contacts' ? 'Menu:' : 'Folder:' }}</span>
-                <span class="font-bold text-white capitalize">
-                    {{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : ($activeFolder === 'contacts' ? 'Kontak' : $activeFolder))))) }}
-                </span>
-            </div>
         </div>
-
-        <!-- Center Notification (Flash message) -->
-        @if (session()->has('webmail_msg'))
-            <div class="hidden md:flex items-center gap-2 px-3.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs shadow-sm animate-pulse">
-                <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i>
-                <span class="truncate max-w-xs">{{ session('webmail_msg') }}</span>
-            </div>
-        @endif
 
         <!-- Right: Action Tools & User Profile -->
         <div class="flex items-center gap-2 sm:gap-2.5">
-            <!-- Segarkan Inbox Button -->
-            <button type="button" 
-                    wire:click="refreshInbox" 
-                    class="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/70 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-                    title="Segarkan Kotak Masuk (Tarik Email Baru)">
-                <i data-lucide="rotate-cw" class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
-                <span class="hidden sm:inline">Segarkan</span>
-            </button>
-
             <!-- Pengaturan Akun Button -->
             <button type="button" 
                     wire:click="openSettingsModal" 
@@ -2255,12 +2229,6 @@ new class extends Component
                                     <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
                                 @endif
                             </h1>
-                            <button type="button" 
-                                    wire:click="refreshInbox" 
-                                    class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer" 
-                                    title="Segarkan Kotak Masuk (Tarik Email Baru)">
-                                <i data-lucide="rotate-cw" class="w-4 h-4 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
-                            </button>
                         </div>
 
                         <!-- Filter Chips: All mail, Unread, Read, Starred (Gaya Hostinger/Gmail) -->
@@ -2315,7 +2283,8 @@ new class extends Component
                             <span class="text-[11px] font-medium text-slate-300">Pilih Semua</span>
                         </div>
 
-                        <!-- Tombol Refresh / Segarkan Persis Seperti Gmail Tepat di Atas Kotak Masuk -->
+                        @if($activeFolder === 'inbox')
+                        <!-- Tombol Refresh / Segarkan Persis Seperti Gmail Hanya Muncul di Kotak Masuk -->
                         <button type="button" 
                                 wire:click="refreshInbox" 
                                 class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-slate-700/80" 
@@ -2323,6 +2292,7 @@ new class extends Component
                             <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
                             <span class="text-[11px] font-medium text-slate-300 hidden sm:inline">Segarkan</span>
                         </button>
+                        @endif
 
                         @if(count($selectedIds) > 0)
                         <div class="flex items-center gap-2 animate-fade-in pl-2 border-l border-slate-800">
