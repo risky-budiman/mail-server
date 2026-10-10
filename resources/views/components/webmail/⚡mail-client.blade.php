@@ -408,7 +408,7 @@ new class extends Component
                 MailboxEmail::create([
                     'virtual_user_id' => $user->id,
                     'folder' => 'inbox',
-                    'from_name' => $parsed['from_name'] ?: 'Sender',
+                    'from_name' => $parsed['from_name'] ?: 'Pengirim',
                     'from_email' => $parsed['from_email'] ?: 'unknown@domain.com',
                     'to' => $user->email,
                     'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
@@ -464,11 +464,36 @@ new class extends Component
         if (!empty($headers['from'])) {
             $fromRaw = $headers['from'];
             if (preg_match('/^(.*?)\s*<([^>]+)>/', $fromRaw, $m)) {
-                $fromName = $this->decodeMimeHeader(trim(trim($m[1]), '"\''));
+                $nameClean = trim(trim($m[1]), '"\' ');
+                $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
                 $fromEmail = strtolower(trim($m[2]));
             } else {
                 $fromEmail = strtolower(trim($fromRaw));
-                $fromName = $fromEmail;
+            }
+        } elseif (!empty($headers['sender'])) {
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $headers['sender'], $m)) {
+                $nameClean = trim(trim($m[1]), '"\' ');
+                $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
+                $fromEmail = strtolower(trim($m[2]));
+            } else {
+                $fromEmail = strtolower(trim($headers['sender']));
+            }
+        } elseif (!empty($headers['reply-to'])) {
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $headers['reply-to'], $m)) {
+                $nameClean = trim(trim($m[1]), '"\' ');
+                $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
+                $fromEmail = strtolower(trim($m[2]));
+            } else {
+                $fromEmail = strtolower(trim($headers['reply-to']));
+            }
+        }
+
+        if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
+            if (!empty($fromEmail) && $fromEmail !== 'unknown@domain.com') {
+                $prefix = explode('@', $fromEmail)[0];
+                $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
+            } else {
+                $fromName = 'Pengirim';
             }
         }
 
@@ -1586,6 +1611,25 @@ new class extends Component
     }
 
     /**
+     * Format nama tampilan pengirim yang bersih dan manusiawi (hindari label generic seperti Sender / Pengirim)
+     */
+    public function formatSenderDisplayName(?string $name, ?string $email): string
+    {
+        $clean = $this->decodeMimeHeader($name);
+        $cleanLower = strtolower(trim($clean));
+        if (!empty($clean) && !in_array($cleanLower, ['sender', 'pengirim', 'unknown', 'unknown@domain.com', 'from sender', 'form sender'])) {
+            return $clean;
+        }
+
+        if (!empty($email) && $email !== 'unknown@domain.com') {
+            $prefix = explode('@', $email)[0];
+            return ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
+        }
+
+        return !empty($clean) ? $clean : 'Pengirim';
+    }
+
+    /**
      * Ekstrak teks bersih ringkas untuk pratinjau daftar email (buang style CSS, entitas &nbsp;, dll)
      */
     public function getCleanSnippet(?string $rawBody, int $limit = 85): string
@@ -1680,7 +1724,7 @@ new class extends Component
                 'id' => $item->id,
                 'thread_count' => $thread['count'],
                 'folder' => $item->folder,
-                'from_name' => $this->decodeMimeHeader($item->from_name),
+                'from_name' => $this->formatSenderDisplayName($item->from_name, $item->from_email),
                 'from_email' => $item->from_email,
                 'to' => $item->to,
                 'subject' => $this->decodeMimeHeader($item->subject),
@@ -1704,7 +1748,7 @@ new class extends Component
                 $selectedEmail = [
                     'id' => $rawSelected->id,
                     'folder' => $rawSelected->folder,
-                    'from_name' => $this->decodeMimeHeader($rawSelected->from_name),
+                    'from_name' => $this->formatSenderDisplayName($rawSelected->from_name, $rawSelected->from_email),
                     'from_email' => $rawSelected->from_email,
                     'to' => $rawSelected->to,
                     'subject' => $this->decodeMimeHeader($rawSelected->subject),
@@ -1743,7 +1787,7 @@ new class extends Component
                             'id' => $tItem->id,
                             'is_current' => ($tItem->id === $rawSelected->id),
                             'folder' => $tItem->folder,
-                            'from_name' => $this->decodeMimeHeader($tItem->from_name),
+                            'from_name' => $this->formatSenderDisplayName($tItem->from_name, $tItem->from_email),
                             'from_email' => $tItem->from_email,
                             'to' => $tItem->to,
                             'subject' => $this->decodeMimeHeader($tItem->subject),

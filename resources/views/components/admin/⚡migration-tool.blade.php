@@ -286,15 +286,41 @@ new class extends Component
                             $size = strlen($rawContent);
                             $this->stats['bytes'] += $size;
 
-                            $fromName = 'Pengirim';
                             $fromEmail = 'unknown@domain.com';
+                            $fromName = '';
                             try {
                                 $fromList = $msg->getFrom();
                                 if (!empty($fromList) && isset($fromList[0])) {
-                                    $fromName = $this->decodeMimeHeader($fromList[0]->personal ?? '') ?: ($fromList[0]->mail ?? 'Pengirim');
-                                    $fromEmail = $fromList[0]->mail ?? 'unknown@domain.com';
+                                    $fromName = $this->decodeMimeHeader($fromList[0]->personal ?? '');
+                                    $fromEmail = $fromList[0]->mail ?? '';
+                                }
+                                if (empty($fromEmail)) {
+                                    $senderList = $msg->getSender();
+                                    if (!empty($senderList) && isset($senderList[0])) {
+                                        $fromName = $fromName ?: $this->decodeMimeHeader($senderList[0]->personal ?? '');
+                                        $fromEmail = $senderList[0]->mail ?? '';
+                                    }
+                                }
+                                if (empty($fromEmail)) {
+                                    $replyList = $msg->getReplyTo();
+                                    if (!empty($replyList) && isset($replyList[0])) {
+                                        $fromName = $fromName ?: $this->decodeMimeHeader($replyList[0]->personal ?? '');
+                                        $fromEmail = $replyList[0]->mail ?? '';
+                                    }
                                 }
                             } catch (\Throwable $e) {}
+
+                            if (empty($fromEmail)) {
+                                $fromEmail = 'unknown@domain.com';
+                            }
+                            if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
+                                if ($fromEmail !== 'unknown@domain.com') {
+                                    $prefix = explode('@', $fromEmail)[0];
+                                    $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
+                                } else {
+                                    $fromName = 'Pengirim';
+                                }
+                            }
 
                             $toEmail = $targetUser->email;
                             try {
@@ -330,10 +356,11 @@ new class extends Component
                                 if ($msg->hasHTMLBody()) {
                                     $body = (string) $msg->getHTMLBody();
                                 } else {
-                                    $body = (string) ($msg->getTextBody() ?: $rawContent);
+                                    $textBody = (string) $msg->getTextBody();
+                                    $body = !empty($textBody) ? nl2br(e($textBody)) : $this->cleanRawBodyContent($rawContent);
                                 }
                             } catch (\Throwable $e) {
-                                $body = $rawContent;
+                                $body = $this->cleanRawBodyContent($rawContent);
                             }
 
                             $isRead = false;
@@ -458,6 +485,60 @@ new class extends Component
     }
 
     /**
+     * Bersihkan konten raw RFC822 dari kebocoran header atau boundary MIME mentah
+     */
+    protected function cleanRawBodyContent(string $raw): string
+    {
+        $parts = preg_split("/\r?\n\r?\n/", $raw, 2);
+        $body = isset($parts[1]) ? $parts[1] : $raw;
+
+        if (preg_match('/--([a-zA-Z0-9_\-\.\/=]{10,})/', $body, $bMatch)) {
+            $boundary = $bMatch[1];
+            $subParts = explode('--' . $boundary, $body);
+            $bestBody = '';
+            foreach ($subParts as $subPart) {
+                $subPart = trim($subPart);
+                if (empty($subPart) || $subPart === '--') continue;
+
+                $partSections = preg_split("/\r?\n\r?\n/", $subPart, 2);
+                $partHeader = $partSections[0] ?? '';
+                $partBody = $partSections[1] ?? '';
+
+                if (stripos($partHeader, 'text/html') !== false) {
+                    if (stripos($partHeader, 'base64') !== false) {
+                        $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody));
+                        if ($decoded) return $decoded;
+                    } elseif (stripos($partHeader, 'quoted-printable') !== false) {
+                        return quoted_printable_decode($partBody);
+                    }
+                    return $partBody;
+                }
+
+                if (stripos($partHeader, 'text/plain') !== false && empty($bestBody)) {
+                    if (stripos($partHeader, 'base64') !== false) {
+                        $decoded = @base64_decode(preg_replace('/\s+/', '', $partBody));
+                        if ($decoded) $bestBody = nl2br(e($decoded));
+                    } elseif (stripos($partHeader, 'quoted-printable') !== false) {
+                        $bestBody = nl2br(e(quoted_printable_decode($partBody)));
+                    } else {
+                        $bestBody = nl2br(e($partBody));
+                    }
+                }
+            }
+            if (!empty($bestBody)) return $bestBody;
+        }
+
+        if (stripos($raw, 'Content-Transfer-Encoding: base64') !== false) {
+            $decoded = @base64_decode(preg_replace('/\s+/', '', $body));
+            if ($decoded) return nl2br(e($decoded));
+        } elseif (stripos($raw, 'Content-Transfer-Encoding: quoted-printable') !== false) {
+            return quoted_printable_decode($body);
+        }
+
+        return nl2br(e(substr(strip_tags($body), 0, 8000)));
+    }
+
+    /**
      * Parse data email dari file .eml mentah
      */
     protected function parseEmlData(string $rawContent, VirtualUser $targetUser, string $fallbackFolder = 'inbox'): array
@@ -467,16 +548,43 @@ new class extends Component
             $subject = $this->decodeMimeHeader(trim($m[1])) ?: '(Tanpa Subjek)';
         }
 
-        $fromName = 'Pengirim';
+        $fromName = '';
         $fromEmail = 'unknown@' . $targetUser->domain->name;
         if (preg_match('/^From:\s*(.+)$/mi', $rawContent, $m)) {
             $rawFrom = trim($m[1]);
             if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawFrom, $fm)) {
-                $fromName = $this->decodeMimeHeader(trim($fm[1])) ?: $fm[2];
-                $fromEmail = trim($fm[2]);
+                $nameClean = trim(trim($fm[1]), '"\' ');
+                $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
+                $fromEmail = strtolower(trim($fm[2]));
             } else {
-                $fromEmail = trim($rawFrom);
-                $fromName = $fromEmail;
+                $fromEmail = strtolower(trim($rawFrom));
+            }
+        } elseif (preg_match('/^Sender:\s*(.+)$/mi', $rawContent, $m)) {
+            $rawSender = trim($m[1]);
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawSender, $fm)) {
+                $nameClean = trim(trim($fm[1]), '"\' ');
+                $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
+                $fromEmail = strtolower(trim($fm[2]));
+            } else {
+                $fromEmail = strtolower(trim($rawSender));
+            }
+        } elseif (preg_match('/^Reply-To:\s*(.+)$/mi', $rawContent, $m)) {
+            $rawReply = trim($m[1]);
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawReply, $fm)) {
+                $nameClean = trim(trim($fm[1]), '"\' ');
+                $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
+                $fromEmail = strtolower(trim($fm[2]));
+            } else {
+                $fromEmail = strtolower(trim($rawReply));
+            }
+        }
+
+        if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
+            if (!empty($fromEmail) && $fromEmail !== 'unknown@' . $targetUser->domain->name) {
+                $prefix = explode('@', $fromEmail)[0];
+                $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
+            } else {
+                $fromName = 'Pengirim';
             }
         }
 
@@ -506,13 +614,7 @@ new class extends Component
             }
         }
 
-        $body = '';
-        $parts = preg_split("/\r?\n\r?\n/", $rawContent, 2);
-        if (isset($parts[1])) {
-            $body = nl2br(e(substr(strip_tags($parts[1]), 0, 4000)));
-        } else {
-            $body = nl2br(e(substr($rawContent, 0, 4000)));
-        }
+        $body = $this->cleanRawBodyContent($rawContent);
 
         return [
             'folder'     => $folder,
