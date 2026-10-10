@@ -246,9 +246,6 @@
                     });
                 }
             });
-
-            const lucideObserver = new MutationObserver(() => { if (!isRefreshing) window.refreshIcons(); });
-            lucideObserver.observe(document.body, { childList: true, subtree: true });
         })();
     </script>
 </body>

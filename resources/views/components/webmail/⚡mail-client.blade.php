@@ -1402,6 +1402,7 @@ new class extends Component
                 $query->where('is_read', true);
             })
             ->orderBy('id', 'desc')
+            ->take(150)
             ->get(['id', 'folder', 'from_name', 'from_email', 'to', 'subject', 'body', 'date_human', 'is_read', 'is_starred', 'attachments', 'spam_reason', 'spam_score', 'created_at']);
 
         // Grouping Thread Percakapan: Hanya gabungkan jika SUBJEK SAMA DAN LAWAN BICARA (KONTAK) SAMA
@@ -1521,12 +1522,18 @@ new class extends Component
             }
         }
 
+        $rawCounts = MailboxEmail::where('virtual_user_id', $userId)
+            ->selectRaw("folder, count(*) as total, sum(case when is_read = 0 then 1 else 0 end) as unread")
+            ->groupBy('folder')
+            ->get()
+            ->keyBy('folder');
+
         $counts = [
-            'inbox' => MailboxEmail::where('virtual_user_id', $userId)->where('folder', 'inbox')->where('is_read', false)->count(),
-            'sent' => MailboxEmail::where('virtual_user_id', $userId)->where('folder', 'sent')->count(),
-            'drafts' => MailboxEmail::where('virtual_user_id', $userId)->where('folder', 'drafts')->count(),
-            'spam' => MailboxEmail::where('virtual_user_id', $userId)->where('folder', 'spam')->where('is_read', false)->count(),
-            'trash' => MailboxEmail::where('virtual_user_id', $userId)->where('folder', 'trash')->count(),
+            'inbox' => (int) ($rawCounts->get('inbox')?->unread ?? 0),
+            'sent' => (int) ($rawCounts->get('sent')?->total ?? 0),
+            'drafts' => (int) ($rawCounts->get('drafts')?->total ?? 0),
+            'spam' => (int) ($rawCounts->get('spam')?->unread ?? 0),
+            'trash' => (int) ($rawCounts->get('trash')?->total ?? 0),
         ];
 
         return view('components.webmail.⚡mail-client', [
