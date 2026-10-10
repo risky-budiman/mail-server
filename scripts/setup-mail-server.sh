@@ -185,6 +185,7 @@ OversignHeaders         From
 UserID                  opendkim:opendkim
 PidFile                 /run/opendkim/opendkim.pid
 Socket                  inet:12301@127.0.0.1
+RequireSafeKeys         false
 
 KeyTable                /etc/opendkim/KeyTable
 SigningTable            refile:/etc/opendkim/SigningTable
