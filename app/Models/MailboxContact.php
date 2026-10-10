@@ -35,50 +35,58 @@ class MailboxContact extends Model
      */
     public static function recordCommunication(int $virtualUserId, ?string $rawEmail, ?string $rawName = null, $timestamp = null): ?self
     {
-        if (empty($rawEmail)) {
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('mailbox_contacts')) {
+                return null;
+            }
+
+            if (empty($rawEmail)) {
+                return null;
+            }
+
+            // Ekstrak email murni jika memuat format "Nama <email@domain.com>"
+            $email = trim($rawEmail);
+            $name = trim($rawName ?? '');
+
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawEmail, $matches)) {
+                if (empty($name)) {
+                    $name = trim($matches[1], " \t\n\r\0\x0B\"'");
+                }
+                $email = trim($matches[2]);
+            }
+
+            $email = strtolower(trim($email));
+
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return null;
+            }
+
+            // Cari atau buat kontak
+            $contact = self::firstOrNew([
+                'virtual_user_id' => $virtualUserId,
+                'email' => $email,
+            ]);
+
+            if (!empty($name) && (empty($contact->name) || $contact->name === $email)) {
+                $contact->name = $name;
+            }
+
+            $contact->last_communicated_at = $timestamp ? \Carbon\Carbon::parse($timestamp) : now();
+
+            if ($contact->exists) {
+                $contact->communication_count = ($contact->communication_count ?? 1) + 1;
+            } else {
+                $contact->communication_count = 1;
+                if (empty($contact->name)) {
+                    $contact->name = explode('@', $email)[0];
+                }
+            }
+
+            $contact->save();
+
+            return $contact;
+        } catch (\Throwable $e) {
             return null;
         }
-
-        // Ekstrak email murni jika memuat format "Nama <email@domain.com>"
-        $email = trim($rawEmail);
-        $name = trim($rawName ?? '');
-
-        if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawEmail, $matches)) {
-            if (empty($name)) {
-                $name = trim($matches[1], " \t\n\r\0\x0B\"'");
-            }
-            $email = trim($matches[2]);
-        }
-
-        $email = strtolower(trim($email));
-
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return null;
-        }
-
-        // Cari atau buat kontak
-        $contact = self::firstOrNew([
-            'virtual_user_id' => $virtualUserId,
-            'email' => $email,
-        ]);
-
-        if (!empty($name) && (empty($contact->name) || $contact->name === $email)) {
-            $contact->name = $name;
-        }
-
-        $contact->last_communicated_at = $timestamp ? \Carbon\Carbon::parse($timestamp) : now();
-
-        if ($contact->exists) {
-            $contact->communication_count = ($contact->communication_count ?? 1) + 1;
-        } else {
-            $contact->communication_count = 1;
-            if (empty($contact->name)) {
-                $contact->name = explode('@', $email)[0];
-            }
-        }
-
-        $contact->save();
-
-        return $contact;
     }
 }

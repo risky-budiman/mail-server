@@ -137,32 +137,40 @@ new class extends Component
     // ==========================================
     public function syncContactsFromHistory()
     {
-        $user = $this->getAccount();
-        if (!$user) return;
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('mailbox_contacts')) {
+                return;
+            }
 
-        // Ambil semua pengirim dari inbox / folder lain yang pernah masuk
-        $incoming = MailboxEmail::where('virtual_user_id', $user->id)
-            ->where('from_email', '!=', $user->email)
-            ->whereNotNull('from_email')
-            ->get(['from_email', 'from_name', 'created_at']);
+            $user = $this->getAccount();
+            if (!$user) return;
 
-        foreach ($incoming as $item) {
-            MailboxContact::recordCommunication($user->id, $item->from_email, $item->from_name, $item->created_at);
-        }
+            // Ambil semua pengirim dari inbox / folder lain yang pernah masuk
+            $incoming = MailboxEmail::where('virtual_user_id', $user->id)
+                ->where('from_email', '!=', $user->email)
+                ->whereNotNull('from_email')
+                ->get(['from_email', 'from_name', 'created_at']);
 
-        // Ambil semua penerima dari email terkirim
-        $outgoing = MailboxEmail::where('virtual_user_id', $user->id)
-            ->where('folder', 'sent')
-            ->whereNotNull('to')
-            ->get(['to', 'created_at']);
+            foreach ($incoming as $item) {
+                MailboxContact::recordCommunication($user->id, $item->from_email, $item->from_name, $item->created_at);
+            }
 
-        foreach ($outgoing as $item) {
-            $recipients = preg_split('/[,;\s]+/', $item->to);
-            foreach ($recipients as $rec) {
-                if (!empty($rec) && $rec !== $user->email) {
-                    MailboxContact::recordCommunication($user->id, $rec, null, $item->created_at);
+            // Ambil semua penerima dari email terkirim
+            $outgoing = MailboxEmail::where('virtual_user_id', $user->id)
+                ->where('folder', 'sent')
+                ->whereNotNull('to')
+                ->get(['to', 'created_at']);
+
+            foreach ($outgoing as $item) {
+                $recipients = preg_split('/[,;\s]+/', $item->to);
+                foreach ($recipients as $rec) {
+                    if (!empty($rec) && $rec !== $user->email) {
+                        MailboxContact::recordCommunication($user->id, $rec, null, $item->created_at);
+                    }
                 }
             }
+        } catch (\Throwable $e) {
+            // Tangani aman tanpa memicu error 500
         }
     }
 
@@ -179,19 +187,22 @@ new class extends Component
 
     public function openEditContactModal($id)
     {
-        $user = $this->getAccount();
-        if (!$user) return;
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('mailbox_contacts')) return;
+            $user = $this->getAccount();
+            if (!$user) return;
 
-        $contact = MailboxContact::where('virtual_user_id', $user->id)->find($id);
-        if ($contact) {
-            $this->editingContactId = $contact->id;
-            $this->contactName = $contact->name ?? '';
-            $this->contactEmail = $contact->email ?? '';
-            $this->contactPhone = $contact->phone ?? '';
-            $this->contactCompany = $contact->company ?? '';
-            $this->contactNotes = $contact->notes ?? '';
-            $this->showContactModal = true;
-        }
+            $contact = MailboxContact::where('virtual_user_id', $user->id)->find($id);
+            if ($contact) {
+                $this->editingContactId = $contact->id;
+                $this->contactName = $contact->name ?? '';
+                $this->contactEmail = $contact->email ?? '';
+                $this->contactPhone = $contact->phone ?? '';
+                $this->contactCompany = $contact->company ?? '';
+                $this->contactNotes = $contact->notes ?? '';
+                $this->showContactModal = true;
+            }
+        } catch (\Throwable $e) {}
     }
 
     public function closeContactModal()
@@ -214,65 +225,77 @@ new class extends Component
             'contactEmail.email' => 'Format email kontak tidak valid.',
         ]);
 
-        $user = $this->getAccount();
-        if (!$user) return;
-
-        $cleanEmail = strtolower(trim($this->contactEmail));
-        $cleanName = trim($this->contactName) ?: explode('@', $cleanEmail)[0];
-
-        if ($this->editingContactId) {
-            $contact = MailboxContact::where('virtual_user_id', $user->id)->find($this->editingContactId);
-            if ($contact) {
-                $contact->update([
-                    'name' => $cleanName,
-                    'email' => $cleanEmail,
-                    'phone' => trim($this->contactPhone) ?: null,
-                    'company' => trim($this->contactCompany) ?: null,
-                    'notes' => trim($this->contactNotes) ?: null,
-                ]);
-                session()->flash('contact_success', "Kontak '{$cleanName}' berhasil diperbarui!");
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('mailbox_contacts')) {
+                session()->flash('contact_error', 'Tabel kontak belum tersedia. Silakan jalankan php artisan migrate.');
+                return;
             }
-        } else {
-            $contact = MailboxContact::where('virtual_user_id', $user->id)
-                ->where('email', $cleanEmail)
-                ->first();
 
-            if ($contact) {
-                $contact->update([
-                    'name' => $cleanName,
-                    'phone' => trim($this->contactPhone) ?: $contact->phone,
-                    'company' => trim($this->contactCompany) ?: $contact->company,
-                    'notes' => trim($this->contactNotes) ?: $contact->notes,
-                ]);
+            $user = $this->getAccount();
+            if (!$user) return;
+
+            $cleanEmail = strtolower(trim($this->contactEmail));
+            $cleanName = trim($this->contactName) ?: explode('@', $cleanEmail)[0];
+
+            if ($this->editingContactId) {
+                $contact = MailboxContact::where('virtual_user_id', $user->id)->find($this->editingContactId);
+                if ($contact) {
+                    $contact->update([
+                        'name' => $cleanName,
+                        'email' => $cleanEmail,
+                        'phone' => trim($this->contactPhone) ?: null,
+                        'company' => trim($this->contactCompany) ?: null,
+                        'notes' => trim($this->contactNotes) ?: null,
+                    ]);
+                    session()->flash('contact_success', "Kontak '{$cleanName}' berhasil diperbarui!");
+                }
             } else {
-                MailboxContact::create([
-                    'virtual_user_id' => $user->id,
-                    'name' => $cleanName,
-                    'email' => $cleanEmail,
-                    'phone' => trim($this->contactPhone) ?: null,
-                    'company' => trim($this->contactCompany) ?: null,
-                    'notes' => trim($this->contactNotes) ?: null,
-                    'last_communicated_at' => now(),
-                    'communication_count' => 1,
-                ]);
-            }
-            session()->flash('contact_success', "Kontak '{$cleanName}' berhasil disimpan!");
-        }
+                $contact = MailboxContact::where('virtual_user_id', $user->id)
+                    ->where('email', $cleanEmail)
+                    ->first();
 
-        $this->closeContactModal();
+                if ($contact) {
+                    $contact->update([
+                        'name' => $cleanName,
+                        'phone' => trim($this->contactPhone) ?: $contact->phone,
+                        'company' => trim($this->contactCompany) ?: $contact->company,
+                        'notes' => trim($this->contactNotes) ?: $contact->notes,
+                    ]);
+                } else {
+                    MailboxContact::create([
+                        'virtual_user_id' => $user->id,
+                        'name' => $cleanName,
+                        'email' => $cleanEmail,
+                        'phone' => trim($this->contactPhone) ?: null,
+                        'company' => trim($this->contactCompany) ?: null,
+                        'notes' => trim($this->contactNotes) ?: null,
+                        'last_communicated_at' => now(),
+                        'communication_count' => 1,
+                    ]);
+                }
+                session()->flash('contact_success', "Kontak '{$cleanName}' berhasil disimpan!");
+            }
+
+            $this->closeContactModal();
+        } catch (\Throwable $e) {
+            session()->flash('contact_error', 'Gagal menyimpan kontak: ' . $e->getMessage());
+        }
     }
 
     public function deleteContact($id)
     {
-        $user = $this->getAccount();
-        if (!$user) return;
+        try {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('mailbox_contacts')) return;
+            $user = $this->getAccount();
+            if (!$user) return;
 
-        $contact = MailboxContact::where('virtual_user_id', $user->id)->find($id);
-        if ($contact) {
-            $name = $contact->name ?: $contact->email;
-            $contact->delete();
-            session()->flash('contact_success', "Kontak '{$name}' berhasil dihapus.");
-        }
+            $contact = MailboxContact::where('virtual_user_id', $user->id)->find($id);
+            if ($contact) {
+                $name = $contact->name ?: $contact->email;
+                $contact->delete();
+                session()->flash('contact_success', "Kontak '{$name}' berhasil dihapus.");
+            }
+        } catch (\Throwable $e) {}
     }
 
     public function composeToContact($email)
@@ -293,20 +316,30 @@ new class extends Component
 
         if ($user) {
             // 1. Muat folder dari database sesuai yang dibuat pengguna (tanpa folder default)
-            $this->customFolders = MailboxFolder::where('virtual_user_id', $user->id)->pluck('name')->toArray();
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('mailbox_folders')) {
+                    $this->customFolders = MailboxFolder::where('virtual_user_id', $user->id)->pluck('name')->toArray();
+                }
+            } catch (\Throwable $e) {}
 
             // 2. Sinkronkan email riil dari harddisk VPS (/var/vmail) secara teratur (dibatasi 1x per 2 menit agar loading secepat kilat)
-            $lastSyncKey = "maildir_last_sync_{$user->id}";
-            if (!cache()->has($lastSyncKey)) {
-                $this->syncFromMaildir($user);
-                cache()->put($lastSyncKey, true, now()->addMinutes(2));
-            }
+            try {
+                $lastSyncKey = "maildir_last_sync_{$user->id}";
+                if (!cache()->has($lastSyncKey)) {
+                    $this->syncFromMaildir($user);
+                    cache()->put($lastSyncKey, true, now()->addMinutes(2));
+                }
+            } catch (\Throwable $e) {}
 
             // 3. Muat daftar alias yang diarahkan ke akun mailbox ini
-            $this->loadAvailableAliases($user);
+            try {
+                $this->loadAvailableAliases($user);
+            } catch (\Throwable $e) {}
 
             // 4. Sinkronkan kontak dari riwayat komunikasi
-            $this->syncContactsFromHistory();
+            try {
+                $this->syncContactsFromHistory();
+            } catch (\Throwable $e) {}
         }
     }
 
@@ -405,26 +438,30 @@ new class extends Component
                     continue;
                 }
 
-                MailboxEmail::create([
-                    'virtual_user_id' => $user->id,
-                    'folder' => 'inbox',
-                    'from_name' => $parsed['from_name'] ?: 'Pengirim',
-                    'from_email' => $parsed['from_email'] ?: 'unknown@domain.com',
-                    'to' => $user->email,
-                    'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
-                    'date_human' => $parsed['date'] ?: now()->format('d M, H:i'),
-                    'is_read' => ($sub === 'cur'),
-                    'is_starred' => false,
-                    'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
-                    'attachments' => $parsed['attachments'],
-                ]);
+                try {
+                    MailboxEmail::create([
+                        'virtual_user_id' => $user->id,
+                        'folder' => 'inbox',
+                        'from_name' => $parsed['from_name'] ?: 'Pengirim',
+                        'from_email' => $parsed['from_email'] ?: 'unknown@domain.com',
+                        'to' => $user->email,
+                        'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
+                        'date_human' => $parsed['date'] ?: now()->format('d M, H:i'),
+                        'is_read' => ($sub === 'cur'),
+                        'is_starred' => false,
+                        'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
+                        'attachments' => $parsed['attachments'],
+                    ]);
 
-                // Otomatis simpan pengirim ke kontak
-                if (!empty($parsed['from_email']) && $parsed['from_email'] !== 'unknown@domain.com') {
-                    MailboxContact::recordCommunication($user->id, $parsed['from_email'], $parsed['from_name']);
+                    // Otomatis simpan pengirim ke kontak
+                    if (!empty($parsed['from_email']) && $parsed['from_email'] !== 'unknown@domain.com') {
+                        MailboxContact::recordCommunication($user->id, $parsed['from_email'], $parsed['from_name']);
+                    }
+
+                    $synced++;
+                } catch (\Throwable $e) {
+                    // Lanjutkan jika satu berkas email memiliki encoding atau karakter invalid
                 }
-
-                $synced++;
             }
         }
 
@@ -1061,7 +1098,7 @@ new class extends Component
             // Format teks forwarded persis seperti tampilan Hostinger
             $this->quickReplyText = "\n\n---------- Forwarded message ---------\n" .
                 "From: " . $selected->from_name . " <" . $selected->from_email . ">\n" .
-                "Date: " . ($selected->date_human ?: $selected->created_at->format('d M, H:i')) . "\n" .
+                "Date: " . ($selected->date_human ?: ($selected->created_at ? $selected->created_at->format('d M, H:i') : '-')) . "\n" .
                 "Subject: " . $selected->subject . "\n" .
                 "To: " . ($selected->to ?? 'admin@ids.net.id') . "\n\n" .
                 $selected->body;
@@ -1729,7 +1766,7 @@ new class extends Component
                 'to' => $item->to,
                 'subject' => $this->decodeMimeHeader($item->subject),
                 'snippet' => $this->getCleanSnippet($item->body_snippet ?? '', 85),
-                'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
+                'date' => $item->date_human ?: ($item->created_at ? $item->created_at->format('d M, H:i') : '-'),
                 'is_read' => !$thread['has_unread'],
                 'is_starred' => $thread['has_starred'],
                 'attachments' => $item->attachments ?: [],
@@ -1752,7 +1789,7 @@ new class extends Component
                     'from_email' => $rawSelected->from_email,
                     'to' => $rawSelected->to,
                     'subject' => $this->decodeMimeHeader($rawSelected->subject),
-                    'date' => $rawSelected->date_human ?: $rawSelected->created_at->format('d M, H:i'),
+                    'date' => $rawSelected->date_human ?: ($rawSelected->created_at ? $rawSelected->created_at->format('d M, H:i') : '-'),
                     'is_read' => (bool) $rawSelected->is_read,
                     'is_starred' => (bool) $rawSelected->is_starred,
                     'body' => $rawSelected->body,
@@ -1791,7 +1828,7 @@ new class extends Component
                             'from_email' => $tItem->from_email,
                             'to' => $tItem->to,
                             'subject' => $this->decodeMimeHeader($tItem->subject),
-                            'date' => $tItem->date_human ?: $tItem->created_at->format('d M, H:i'),
+                            'date' => $tItem->date_human ?: ($tItem->created_at ? $tItem->created_at->format('d M, H:i') : '-'),
                             'body' => $tItem->body,
                             'attachments' => $tItem->attachments ?: [],
                         ];
@@ -1806,7 +1843,22 @@ new class extends Component
             ->get()
             ->keyBy('folder');
 
-        $contactsCount = $userId ? MailboxContact::where('virtual_user_id', $userId)->count() : 0;
+        $hasContactsTable = false;
+        try {
+            $hasContactsTable = \Illuminate\Support\Facades\Schema::hasTable('mailbox_contacts');
+        } catch (\Throwable $e) {
+            $hasContactsTable = false;
+        }
+
+        $contactsCount = 0;
+        if ($hasContactsTable && $userId) {
+            try {
+                $contactsCount = MailboxContact::where('virtual_user_id', $userId)->count();
+            } catch (\Throwable $e) {
+                $contactsCount = 0;
+            }
+        }
+
         $counts = [
             'inbox' => (int) ($rawCounts->get('inbox')?->unread ?? 0),
             'sent' => (int) ($rawCounts->get('sent')?->total ?? 0),
@@ -1819,22 +1871,27 @@ new class extends Component
         // Daftar kontak untuk tampilan Buku Kontak dan auto-suggest di form Compose
         $contactsList = collect();
         $savedContactsList = collect();
-        if ($userId) {
-            $savedContactsList = MailboxContact::where('virtual_user_id', $userId)
-                ->orderBy('name', 'asc')
-                ->get(['id', 'name', 'email']);
+        if ($hasContactsTable && $userId) {
+            try {
+                $savedContactsList = MailboxContact::where('virtual_user_id', $userId)
+                    ->orderBy('name', 'asc')
+                    ->get(['id', 'name', 'email']);
 
-            $contactsQuery = MailboxContact::where('virtual_user_id', $userId);
-            if (!empty($this->contactSearchQuery)) {
-                $term = '%' . trim($this->contactSearchQuery) . '%';
-                $contactsQuery->where(function($q) use ($term) {
-                    $q->where('name', 'like', $term)
-                      ->orWhere('email', 'like', $term)
-                      ->orWhere('company', 'like', $term)
-                      ->orWhere('phone', 'like', $term);
-                });
+                $contactsQuery = MailboxContact::where('virtual_user_id', $userId);
+                if (!empty($this->contactSearchQuery)) {
+                    $term = '%' . trim($this->contactSearchQuery) . '%';
+                    $contactsQuery->where(function($q) use ($term) {
+                        $q->where('name', 'like', $term)
+                          ->orWhere('email', 'like', $term)
+                          ->orWhere('company', 'like', $term)
+                          ->orWhere('phone', 'like', $term);
+                    });
+                }
+                $contactsList = $contactsQuery->orderBy('last_communicated_at', 'desc')->orderBy('name', 'asc')->get();
+            } catch (\Throwable $e) {
+                $savedContactsList = collect();
+                $contactsList = collect();
             }
-            $contactsList = $contactsQuery->orderBy('last_communicated_at', 'desc')->orderBy('name', 'asc')->get();
         }
 
         return view('components.webmail.⚡mail-client', [
