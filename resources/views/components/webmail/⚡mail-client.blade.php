@@ -1401,9 +1401,10 @@ new class extends Component
             ->when($this->activeFilter === 'read', function ($query) {
                 $query->where('is_read', true);
             })
+            ->selectRaw("id, folder, from_name, from_email, `to`, subject, SUBSTR(body, 1, 300) as body_snippet, date_human, is_read, is_starred, attachments, spam_reason, spam_score, created_at")
             ->orderBy('id', 'desc')
-            ->take(150)
-            ->get(['id', 'folder', 'from_name', 'from_email', 'to', 'subject', 'body', 'date_human', 'is_read', 'is_starred', 'attachments', 'spam_reason', 'spam_score', 'created_at']);
+            ->take(60)
+            ->get();
 
         // Grouping Thread Percakapan: Hanya gabungkan jika SUBJEK SAMA DAN LAWAN BICARA (KONTAK) SAMA
         $groupedThreads = [];
@@ -1449,8 +1450,7 @@ new class extends Component
                 'from_email' => $item->from_email,
                 'to' => $item->to,
                 'subject' => $this->decodeMimeHeader($item->subject),
-                'body' => $item->body,
-                'snippet' => $this->getCleanSnippet($item->body, 85),
+                'snippet' => $this->getCleanSnippet($item->body_snippet ?? '', 85),
                 'date' => $item->date_human ?: $item->created_at->format('d M, H:i'),
                 'is_read' => !$thread['has_unread'],
                 'is_starred' => $thread['has_starred'],

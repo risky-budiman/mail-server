@@ -52,8 +52,8 @@
     </style>
 </head>
 <body class="h-full antialiased font-sans bg-slate-950 text-slate-100 overflow-hidden flex flex-col relative">
-    <!-- Sleek Top Loading Indicator during Livewire requests -->
-    <div wire:loading class="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-500 z-50 shadow-md shadow-cyan-500/30 animate-pulse"></div>
+    <!-- Sleek Top Loading Indicator during Livewire requests (Instant Feedback) -->
+    <div id="livewire-global-loader" class="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-500 z-50 shadow-md shadow-cyan-500/40 transition-opacity duration-150 pointer-events-none opacity-0"></div>
 
     <!-- Webmail Body Slot (Edge-to-Edge full viewport) -->
     <main class="flex-1 w-full h-full min-h-0 overflow-hidden flex flex-col p-0 m-0">
@@ -83,7 +83,14 @@
             document.addEventListener('livewire:init', () => {
                 window.refreshIcons();
 
+                const loader = document.getElementById('livewire-global-loader');
                 if (typeof Livewire !== 'undefined' && Livewire.hook) {
+                    Livewire.hook('request', ({ respond, fail }) => {
+                        if (loader) loader.classList.remove('opacity-0');
+                        respond(() => { if (loader) loader.classList.add('opacity-0'); });
+                        fail(() => { if (loader) loader.classList.add('opacity-0'); });
+                    });
+
                     Livewire.hook('commit', ({ succeed }) => {
                         succeed(() => {
                             window.refreshIcons();

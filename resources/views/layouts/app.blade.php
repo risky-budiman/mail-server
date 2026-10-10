@@ -18,6 +18,9 @@
 <body class="h-full antialiased font-sans flex flex-col md:flex-row bg-slate-950 text-slate-100 overflow-hidden" 
       x-data="{ mobileMenuOpen: false }">
     
+    <!-- Instant Visual Feedback Loader for any navigation or action -->
+    <div id="admin-global-loader" class="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-500 z-50 shadow-md shadow-indigo-500/40 transition-opacity duration-150 pointer-events-none opacity-0"></div>
+
     <!-- Mobile Header & Toggle Button (Shown only on small screens) -->
     <div class="md:hidden h-14 px-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between z-30 shrink-0">
         <div class="flex items-center gap-2.5">
@@ -71,49 +74,49 @@
                     Core Portal
                 </div>
 
-                <a href="{{ route('admin.dashboard') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.dashboard') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.dashboard') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="layout-dashboard" class="w-4 h-4 shrink-0"></i>
                     <span>Dashboard Stats</span>
                 </a>
 
-                <a href="{{ route('admin.domains') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.domains') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.domains') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="globe" class="w-4 h-4 shrink-0"></i>
                     <span>Domain Bisnis</span>
                 </a>
 
-                <a href="{{ route('admin.users') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.users') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.users') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="users" class="w-4 h-4 shrink-0"></i>
                     <span>Akun Email (Mailbox)</span>
                 </a>
 
-                <a href="{{ route('admin.aliases') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.aliases') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.aliases') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="forward" class="w-4 h-4 shrink-0"></i>
                     <span>Alias & Forwarding</span>
                 </a>
 
-                <a href="{{ route('admin.dns-helper') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.dns-helper') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.dns-helper') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="shield-check" class="w-4 h-4 shrink-0"></i>
                     <span>DNS & Security Guide</span>
                 </a>
 
-                <a href="{{ route('admin.mail-tester') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.mail-tester') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.mail-tester') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="check-check" class="w-4 h-4 shrink-0"></i>
                     <span>Deliverability Test (10/10)</span>
                 </a>
 
-                <a href="{{ route('admin.installer') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.installer') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.installer') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="cpu" class="w-4 h-4 shrink-0 text-cyan-400"></i>
                     <span>1-Click Server Installer</span>
                 </a>
 
-                <a href="{{ route('admin.migration') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.migration') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.migration') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <div class="flex items-center gap-3">
                         <i data-lucide="arrow-left-right" class="w-4 h-4 shrink-0 text-amber-400"></i>
@@ -122,13 +125,13 @@
                     <span class="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">Baru</span>
                 </a>
 
-                <a href="{{ route('admin.logs') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.logs') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.logs') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="terminal" class="w-4 h-4 shrink-0"></i>
                     <span>Mail Logs Monitor</span>
                 </a>
 
-                <a href="{{ route('admin.profile') }}" wire:navigate @click="mobileMenuOpen = false"
+                <a href="{{ route('admin.profile') }}" wire:navigate.hover @click="mobileMenuOpen = false"
                    class="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all {{ request()->routeIs('admin.profile') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
                     <i data-lucide="user-cog" class="w-4 h-4 shrink-0 text-indigo-400"></i>
                     <span>Keamanan & Akun Admin</span>
@@ -238,7 +241,14 @@
             document.addEventListener('livewire:init', () => {
                 window.refreshIcons();
 
+                const loader = document.getElementById('admin-global-loader');
                 if (typeof Livewire !== 'undefined' && Livewire.hook) {
+                    Livewire.hook('request', ({ respond, fail }) => {
+                        if (loader) loader.classList.remove('opacity-0');
+                        respond(() => { if (loader) loader.classList.add('opacity-0'); });
+                        fail(() => { if (loader) loader.classList.add('opacity-0'); });
+                    });
+
                     Livewire.hook('commit', ({ succeed }) => {
                         succeed(() => {
                             window.refreshIcons();

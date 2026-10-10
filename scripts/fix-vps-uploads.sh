@@ -25,12 +25,22 @@ done
 # Update semua file php.ini (fpm, cli, apache2)
 for INI_FILE in /etc/php/*/*/php.ini; do
     if [ -f "$INI_FILE" ]; then
-        echo "--> Memperbarui batas upload di: $INI_FILE"
+        echo "--> Mengoptimasi php.ini & OPcache di: $INI_FILE"
         sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 500M/' "$INI_FILE"
         sed -i 's/^post_max_size\s*=.*/post_max_size = 500M/' "$INI_FILE"
         sed -i 's/^memory_limit\s*=.*/memory_limit = 1024M/' "$INI_FILE"
         sed -i 's/^max_execution_time\s*=.*/max_execution_time = 600/' "$INI_FILE"
         sed -i 's/^max_input_time\s*=.*/max_input_time = 600/' "$INI_FILE"
+        
+        # High Performance OPcache & Realpath Cache (Akselerasi Kecepatan Eksekusi PHP 300%-500%)
+        sed -i 's/^;*opcache.enable\s*=.*/opcache.enable = 1/' "$INI_FILE"
+        sed -i 's/^;*opcache.enable_cli\s*=.*/opcache.enable_cli = 1/' "$INI_FILE"
+        sed -i 's/^;*opcache.memory_consumption\s*=.*/opcache.memory_consumption = 256/' "$INI_FILE"
+        sed -i 's/^;*opcache.interned_strings_buffer\s*=.*/opcache.interned_strings_buffer = 16/' "$INI_FILE"
+        sed -i 's/^;*opcache.max_accelerated_files\s*=.*/opcache.max_accelerated_files = 30000/' "$INI_FILE"
+        sed -i 's/^;*opcache.validate_timestamps\s*=.*/opcache.validate_timestamps = 1/' "$INI_FILE"
+        sed -i 's/^;*realpath_cache_size\s*=.*/realpath_cache_size = 4096K/' "$INI_FILE"
+        sed -i 's/^;*realpath_cache_ttl\s*=.*/realpath_cache_ttl = 600/' "$INI_FILE"
     fi
 done
 
