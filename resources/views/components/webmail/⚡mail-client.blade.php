@@ -5,18 +5,29 @@ use Livewire\WithFileUploads;
 use App\Models\VirtualUser;
 use App\Models\MailboxEmail;
 use App\Models\MailboxFolder;
+use App\Models\MailboxContact;
 
 new class extends Component
 {
     use WithFileUploads;
 
-    public $activeFolder = 'inbox'; // inbox, sent, drafts, spam, trash, or custom folder name
+    public $activeFolder = 'inbox'; // inbox, sent, drafts, spam, trash, contacts, or custom folder name
     public $selectedEmailId = null;
     public $viewMode = 'list'; // 'list' or 'detail' (Gmail/Hostinger style)
     public $activeFilter = 'all'; // 'all', 'unread', 'read', 'starred'
     public $selectedIds = []; // Checkbox select all / multiple
     public $showComposeModal = false;
     public $currentAccount = null;
+
+    // Contact state (Buku Kontak otomatis dari riwayat & komunikasi)
+    public $contactSearchQuery = '';
+    public $showContactModal = false;
+    public $editingContactId = null;
+    public $contactName = '';
+    public $contactEmail = '';
+    public $contactPhone = '';
+    public $contactCompany = '';
+    public $contactNotes = '';
 
     // Search and filter state
     public $searchQuery = '';
@@ -121,6 +132,155 @@ new class extends Component
         }
     }
 
+    // ==========================================
+    // METODE PENGELOLAAN KONTAK OTOMATIS & MANUAL
+    // ==========================================
+    public function syncContactsFromHistory()
+    {
+        $user = $this->getAccount();
+        if (!$user) return;
+
+        // Ambil semua pengirim dari inbox / folder lain yang pernah masuk
+        $incoming = MailboxEmail::where('virtual_user_id', $user->id)
+            ->where('from_email', '!=', $user->email)
+            ->whereNotNull('from_email')
+            ->get(['from_email', 'from_name', 'created_at']);
+
+        foreach ($incoming as $item) {
+            MailboxContact::recordCommunication($user->id, $item->from_email, $item->from_name, $item->created_at);
+        }
+
+        // Ambil semua penerima dari email terkirim
+        $outgoing = MailboxEmail::where('virtual_user_id', $user->id)
+            ->where('folder', 'sent')
+            ->whereNotNull('to')
+            ->get(['to', 'created_at']);
+
+        foreach ($outgoing as $item) {
+            $recipients = preg_split('/[,;\s]+/', $item->to);
+            foreach ($recipients as $rec) {
+                if (!empty($rec) && $rec !== $user->email) {
+                    MailboxContact::recordCommunication($user->id, $rec, null, $item->created_at);
+                }
+            }
+        }
+    }
+
+    public function openCreateContactModal()
+    {
+        $this->editingContactId = null;
+        $this->contactName = '';
+        $this->contactEmail = '';
+        $this->contactPhone = '';
+        $this->contactCompany = '';
+        $this->contactNotes = '';
+        $this->showContactModal = true;
+    }
+
+    public function openEditContactModal($id)
+    {
+        $user = $this->getAccount();
+        if (!$user) return;
+
+        $contact = MailboxContact::where('virtual_user_id', $user->id)->find($id);
+        if ($contact) {
+            $this->editingContactId = $contact->id;
+            $this->contactName = $contact->name ?? '';
+            $this->contactEmail = $contact->email ?? '';
+            $this->contactPhone = $contact->phone ?? '';
+            $this->contactCompany = $contact->company ?? '';
+            $this->contactNotes = $contact->notes ?? '';
+            $this->showContactModal = true;
+        }
+    }
+
+    public function closeContactModal()
+    {
+        $this->showContactModal = false;
+        $this->editingContactId = null;
+        $this->reset(['contactName', 'contactEmail', 'contactPhone', 'contactCompany', 'contactNotes']);
+    }
+
+    public function saveContact()
+    {
+        $this->validate([
+            'contactName' => 'nullable|string|max:100',
+            'contactEmail' => 'required|email|max:100',
+            'contactPhone' => 'nullable|string|max:30',
+            'contactCompany' => 'nullable|string|max:100',
+            'contactNotes' => 'nullable|string|max:500',
+        ], [
+            'contactEmail.required' => 'Alamat email kontak wajib diisi.',
+            'contactEmail.email' => 'Format email kontak tidak valid.',
+        ]);
+
+        $user = $this->getAccount();
+        if (!$user) return;
+
+        $cleanEmail = strtolower(trim($this->contactEmail));
+        $cleanName = trim($this->contactName) ?: explode('@', $cleanEmail)[0];
+
+        if ($this->editingContactId) {
+            $contact = MailboxContact::where('virtual_user_id', $user->id)->find($this->editingContactId);
+            if ($contact) {
+                $contact->update([
+                    'name' => $cleanName,
+                    'email' => $cleanEmail,
+                    'phone' => trim($this->contactPhone) ?: null,
+                    'company' => trim($this->contactCompany) ?: null,
+                    'notes' => trim($this->contactNotes) ?: null,
+                ]);
+                session()->flash('contact_success', "Kontak '{$cleanName}' berhasil diperbarui!");
+            }
+        } else {
+            $contact = MailboxContact::where('virtual_user_id', $user->id)
+                ->where('email', $cleanEmail)
+                ->first();
+
+            if ($contact) {
+                $contact->update([
+                    'name' => $cleanName,
+                    'phone' => trim($this->contactPhone) ?: $contact->phone,
+                    'company' => trim($this->contactCompany) ?: $contact->company,
+                    'notes' => trim($this->contactNotes) ?: $contact->notes,
+                ]);
+            } else {
+                MailboxContact::create([
+                    'virtual_user_id' => $user->id,
+                    'name' => $cleanName,
+                    'email' => $cleanEmail,
+                    'phone' => trim($this->contactPhone) ?: null,
+                    'company' => trim($this->contactCompany) ?: null,
+                    'notes' => trim($this->contactNotes) ?: null,
+                    'last_communicated_at' => now(),
+                    'communication_count' => 1,
+                ]);
+            }
+            session()->flash('contact_success', "Kontak '{$cleanName}' berhasil disimpan!");
+        }
+
+        $this->closeContactModal();
+    }
+
+    public function deleteContact($id)
+    {
+        $user = $this->getAccount();
+        if (!$user) return;
+
+        $contact = MailboxContact::where('virtual_user_id', $user->id)->find($id);
+        if ($contact) {
+            $name = $contact->name ?: $contact->email;
+            $contact->delete();
+            session()->flash('contact_success', "Kontak '{$name}' berhasil dihapus.");
+        }
+    }
+
+    public function composeToContact($email)
+    {
+        $this->composeTo = $email;
+        $this->showComposeModal = true;
+    }
+
     protected function getAccount()
     {
         return auth('mailbox')->user() ?? VirtualUser::first();
@@ -144,6 +304,9 @@ new class extends Component
 
             // 3. Muat daftar alias yang diarahkan ke akun mailbox ini
             $this->loadAvailableAliases($user);
+
+            // 4. Sinkronkan kontak dari riwayat komunikasi
+            $this->syncContactsFromHistory();
         }
     }
 
@@ -255,6 +418,11 @@ new class extends Component
                     'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
                     'attachments' => $parsed['attachments'],
                 ]);
+
+                // Otomatis simpan pengirim ke kontak
+                if (!empty($parsed['from_email']) && $parsed['from_email'] !== 'unknown@domain.com') {
+                    MailboxContact::recordCommunication($user->id, $parsed['from_email'], $parsed['from_name']);
+                }
 
                 $synced++;
             }
@@ -1193,6 +1361,17 @@ new class extends Component
             'attachments' => $savedAttachments,
         ]);
 
+        // Otomatis simpan kontak yang diajak berkomunikasi
+        if (!empty($this->composeTo)) {
+            MailboxContact::recordCommunication($user->id, $this->composeTo);
+        }
+        if (!empty($this->composeCc)) {
+            MailboxContact::recordCommunication($user->id, $this->composeCc);
+        }
+        if (!empty($this->composeBcc)) {
+            MailboxContact::recordCommunication($user->id, $this->composeBcc);
+        }
+
         $actualBytes = $this->calculateActualEmailsBytes();
         $user->syncMaildirDiskUsage($actualBytes);
 
@@ -1276,6 +1455,11 @@ new class extends Component
             'body' => $this->quickReplyText,
             'attachments' => $savedAttachments,
         ]);
+
+        // Otomatis simpan kontak yang dibalas / diteruskan
+        if (!empty($recipient)) {
+            MailboxContact::recordCommunication($user->id, $recipient);
+        }
 
         $actualBytes = $this->calculateActualEmailsBytes();
         $user->syncMaildirDiskUsage($actualBytes);
@@ -1517,13 +1701,36 @@ new class extends Component
             ->get()
             ->keyBy('folder');
 
+        $contactsCount = $userId ? MailboxContact::where('virtual_user_id', $userId)->count() : 0;
         $counts = [
             'inbox' => (int) ($rawCounts->get('inbox')?->unread ?? 0),
             'sent' => (int) ($rawCounts->get('sent')?->total ?? 0),
             'drafts' => (int) ($rawCounts->get('drafts')?->total ?? 0),
             'spam' => (int) ($rawCounts->get('spam')?->unread ?? 0),
             'trash' => (int) ($rawCounts->get('trash')?->total ?? 0),
+            'contacts' => $contactsCount,
         ];
+
+        // Daftar kontak untuk tampilan Buku Kontak dan auto-suggest di form Compose
+        $contactsList = collect();
+        $savedContactsList = collect();
+        if ($userId) {
+            $savedContactsList = MailboxContact::where('virtual_user_id', $userId)
+                ->orderBy('name', 'asc')
+                ->get(['id', 'name', 'email']);
+
+            $contactsQuery = MailboxContact::where('virtual_user_id', $userId);
+            if (!empty($this->contactSearchQuery)) {
+                $term = '%' . trim($this->contactSearchQuery) . '%';
+                $contactsQuery->where(function($q) use ($term) {
+                    $q->where('name', 'like', $term)
+                      ->orWhere('email', 'like', $term)
+                      ->orWhere('company', 'like', $term)
+                      ->orWhere('phone', 'like', $term);
+                });
+            }
+            $contactsList = $contactsQuery->orderBy('last_communicated_at', 'desc')->orderBy('name', 'asc')->get();
+        }
 
         return view('components.webmail.⚡mail-client', [
             'filteredEmails' => $filteredEmails,
@@ -1531,6 +1738,8 @@ new class extends Component
             'threadEmails' => $threadEmails,
             'counts' => $counts,
             'currentAccount' => $user,
+            'contactsList' => $contactsList,
+            'savedContactsList' => $savedContactsList,
         ])->layout('layouts.webmail', ['title' => 'Webmail Client - MailIDS']);
     }
 };
@@ -1567,10 +1776,10 @@ new class extends Component
 
             <!-- Active Folder Badge (Desktop / Tablet) -->
             <div class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 font-medium ml-1">
-                <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : 'folder')))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : ($activeFolder === 'contacts' ? 'users' : 'folder'))))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
                 <span class="text-slate-400">Folder:</span>
                 <span class="font-bold text-white capitalize">
-                    {{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : $activeFolder)))) }}
+                    {{ $activeFolder === 'inbox' ? 'Kotak Masuk' : ($activeFolder === 'sent' ? 'Terkirim' : ($activeFolder === 'drafts' ? 'Drafts' : ($activeFolder === 'spam' ? 'Spam' : ($activeFolder === 'trash' ? 'Sampah' : ($activeFolder === 'contacts' ? 'Kontak' : $activeFolder))))) }}
                 </span>
             </div>
         </div>
@@ -1749,6 +1958,22 @@ new class extends Component
                     </div>
                 </button>
 
+                <!-- Kontak (Otomatis Tersimpan dari Komunikasi) -->
+                <button wire:click="selectFolder('contacts')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'contacts' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-lg shadow-emerald-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-1 rounded-lg {{ $activeFolder === 'contacts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-emerald-400' }}">
+                            <i data-lucide="users" class="w-3.5 h-3.5"></i>
+                        </div>
+                        <span>Kontak</span>
+                    </div>
+                    @if(($counts['contacts'] ?? 0) > 0)
+                        <span class="text-[10px] px-2 py-0.5 rounded-full {{ $activeFolder === 'contacts' ? 'bg-white/20 text-white' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' }} font-bold">
+                            {{ $counts['contacts'] }}
+                        </span>
+                    @endif
+                </button>
+
                 <!-- Bagian Folder (Bisa Hide & Unhide, Label murni 'Folder', Tanpa Folder Default) -->
                 <div class="pt-3 mt-2 border-t border-slate-800/80" x-data="{ showFolderGroup: true }">
                     <div class="flex items-center justify-between px-2 mb-1.5">
@@ -1833,10 +2058,220 @@ new class extends Component
             </div>
         </div>
 
-        <!-- Kolom Konten Utama: Mode Daftar (Gmail/Hostinger List) vs Mode Detail Pesan -->
+        <!-- Kolom Konten Utama: Kontak vs Mode Daftar (Gmail/Hostinger List) vs Mode Detail Pesan -->
         <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-950">
 
-            @if($viewMode === 'list')
+            @if($activeFolder === 'contacts')
+            <!-- ========================================== -->
+            <!-- 0. MODE BUKU KONTAK (CONTACTS ADDRESS BOOK) -->
+            <!-- ========================================== -->
+            <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden" wire:key="contacts-view">
+                
+                <!-- Sub-Header: Judul Kontak, Pencarian & Tombol Aksi -->
+                <div class="p-3.5 sm:px-6 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-sm">
+                                <i data-lucide="users" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                                    <span>Buku Kontak</span>
+                                    <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                        {{ count($contactsList) }} Kontak
+                                    </span>
+                                </h1>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Input Kontak & Tombol Aksi -->
+                    <div class="flex items-center gap-2.5 flex-1 max-w-md ml-auto">
+                        <div class="relative flex-1">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" 
+                                   wire:model.live.debounce.250ms="contactSearchQuery" 
+                                   placeholder="Cari kontak (nama, email, perusahaan)..."
+                                   class="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-inner">
+                            @if(!empty($contactSearchQuery))
+                                <button type="button" 
+                                        wire:click="$set('contactSearchQuery', '')" 
+                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
+                            @endif
+                        </div>
+
+                        <!-- Tombol Sinkronkan Riwayat Komunikasi -->
+                        <button type="button" 
+                                wire:click="syncContactsFromHistory" 
+                                class="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/70 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                title="Sinkronkan kontak dari seluruh riwayat email masuk dan keluar">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-teal-400" wire:loading.class="animate-spin" wire:target="syncContactsFromHistory"></i>
+                            <span class="hidden md:inline">Sinkronkan</span>
+                        </button>
+
+                        <!-- Tombol Tambah Kontak Baru -->
+                        <button type="button" 
+                                wire:click="openCreateContactModal" 
+                                class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0">
+                            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                            <span>Tambah Kontak</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Notifikasi Flash Kontak Sukses -->
+                @if (session()->has('contact_success'))
+                <div class="mx-4 sm:mx-6 mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                        <span>{{ session('contact_success') }}</span>
+                    </div>
+                    <button type="button" @click="$el.parentElement.remove()" class="text-emerald-400/80 hover:text-emerald-200 cursor-pointer">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                @endif
+
+                <!-- Area Grid Kontak -->
+                <div class="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+                    @if($contactsList->isNotEmpty())
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        @foreach($contactsList as $c)
+                        @php
+                            $initial = strtoupper(substr($c->name ?: ($c->email ?: 'C'), 0, 1));
+                            $gradientIndex = (crc32($c->email) % 5);
+                            $gradients = [
+                                'from-cyan-600 to-blue-600',
+                                'from-indigo-600 to-purple-600',
+                                'from-emerald-600 to-teal-600',
+                                'from-amber-600 to-orange-600',
+                                'from-rose-600 to-pink-600',
+                            ];
+                            $cardGradient = $gradients[abs($gradientIndex)];
+                        @endphp
+                        <div class="group relative rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-slate-700/90 p-4 transition-all duration-200 shadow-md hover:shadow-xl hover:shadow-cyan-500/5 flex flex-col justify-between">
+                            <div>
+                                <!-- Header Kartu Kontak: Avatar, Nama, Email & Tombol Aksi -->
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="flex items-center gap-3 min-w-0">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr {{ $cardGradient }} text-white font-bold flex items-center justify-center text-sm shadow-md shrink-0">
+                                            {{ $initial }}
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <h4 class="text-sm font-bold text-white truncate group-hover:text-cyan-300 transition-colors" title="{{ $c->name ?: $c->email }}">
+                                                {{ $c->name ?: explode('@', $c->email)[0] }}
+                                            </h4>
+                                            <span class="text-xs text-cyan-400 font-mono truncate block" title="{{ $c->email }}">
+                                                {{ $c->email }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Menu: Edit & Hapus -->
+                                    <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                        <button type="button" 
+                                                wire:click="openEditContactModal({{ $c->id }})" 
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer" 
+                                                title="Edit kontak">
+                                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                        <button type="button" 
+                                                wire:click="deleteContact({{ $c->id }})" 
+                                                wire:confirm="Yakin ingin menghapus kontak '{{ $c->name ?: $c->email }}'?" 
+                                                class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer" 
+                                                title="Hapus kontak">
+                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Detail Kontak: Perusahaan, Telepon, Catatan -->
+                                <div class="mt-3 space-y-1.5 text-xs text-slate-400">
+                                    @if($c->company)
+                                    <div class="flex items-center gap-2 truncate">
+                                        <i data-lucide="building" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+                                        <span class="truncate">{{ $c->company }}</span>
+                                    </div>
+                                    @endif
+
+                                    @if($c->phone)
+                                    <div class="flex items-center gap-2 truncate">
+                                        <i data-lucide="phone" class="w-3.5 h-3.5 text-slate-500 shrink-0"></i>
+                                        <span class="truncate font-mono">{{ $c->phone }}</span>
+                                    </div>
+                                    @endif
+
+                                    @if($c->notes)
+                                    <div class="text-[11px] text-slate-400/90 italic bg-slate-950/60 p-2 rounded-xl border border-slate-800/80 line-clamp-2 mt-2">
+                                        "{{ $c->notes }}"
+                                    </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <!-- Footer Kartu: Riwayat Komunikasi & Tombol Kirim Email -->
+                            <div class="mt-4 pt-3 border-t border-slate-800/80 flex flex-col gap-2.5">
+                                <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                    <span class="flex items-center gap-1 font-mono">
+                                        <i data-lucide="message-square" class="w-3 h-3 text-emerald-400"></i>
+                                        <span>{{ $c->communication_count }}x komunikasi</span>
+                                    </span>
+                                    <span>
+                                        {{ $c->last_communicated_at ? $c->last_communicated_at->diffForHumans() : 'Baru saja' }}
+                                    </span>
+                                </div>
+
+                                <button type="button" 
+                                        wire:click="composeToContact('{{ $c->email }}')" 
+                                        class="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500/10 via-indigo-500/10 to-purple-500/10 hover:from-cyan-500 hover:to-indigo-600 border border-cyan-500/30 hover:border-transparent text-cyan-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer group-hover:border-cyan-500/60">
+                                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                    <span>Kirim Pesan</span>
+                                </button>
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <!-- Tampilan Kosong (Empty State) -->
+                    <div class="flex flex-col items-center justify-center h-full min-h-[350px] text-center p-6">
+                        <div class="w-16 h-16 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4 shadow-inner">
+                            <i data-lucide="users" class="w-8 h-8 text-cyan-400/60"></i>
+                        </div>
+                        @if(!empty($contactSearchQuery))
+                            <h3 class="text-base font-bold text-white mb-1">Kontak tidak ditemukan</h3>
+                            <p class="text-xs text-slate-400 max-w-sm mb-4">
+                                Tidak ada kontak yang cocok dengan kata kunci "<span class="text-cyan-400 font-semibold">{{ $contactSearchQuery }}</span>".
+                            </p>
+                            <button type="button" wire:click="$set('contactSearchQuery', '')" class="text-xs text-cyan-400 hover:underline cursor-pointer">
+                                Bersihkan Pencarian
+                            </button>
+                        @else
+                            <h3 class="text-base font-bold text-white mb-1">Belum Ada Kontak Tersimpan</h3>
+                            <p class="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
+                                Semua orang yang pernah bertukar email dengan Anda (baik yang Anda kirimi maupun yang mengirim email ke Anda) akan otomatis tersimpan di sini. Anda juga dapat menambahkan kontak secara manual.
+                            </p>
+                            <div class="flex items-center gap-3">
+                                <button type="button" 
+                                        wire:click="openCreateContactModal" 
+                                        class="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20 cursor-pointer">
+                                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                                    <span>Tambah Kontak Baru</span>
+                                </button>
+                                <button type="button" 
+                                        wire:click="syncContactsFromHistory" 
+                                        class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium rounded-xl flex items-center gap-2 transition-all border border-slate-700 cursor-pointer">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4 text-cyan-400"></i>
+                                    <span>Pindai Riwayat Email</span>
+                                </button>
+                            </div>
+                        @endif
+                    </div>
+                    @endif
+                </div>
+            </div>
+            @elseif($viewMode === 'list')
             <!-- ========================================== -->
             <!-- 1. MODE DAFTAR EMAIL (GMAIL / HOSTINGER)    -->
             <!-- ========================================== -->
@@ -2632,12 +3067,20 @@ new class extends Component
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
                             <label class="block text-xs font-bold text-slate-300">Kepada (To)</label>
-                            <button type="button" wire:click="$toggle('showCcBcc')" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold">
+                            <button type="button" wire:click="$toggle('showCcBcc')" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer">
                                 {{ $showCcBcc ? 'Sembunyikan CC/BCC' : '+ Tambah CC / BCC' }}
                             </button>
                         </div>
-                        <input type="email" wire:model="composeTo" placeholder="alamat@tujuan.com" 
+                        <input type="email" 
+                               list="compose-saved-contacts"
+                               wire:model="composeTo" 
+                               placeholder="alamat@tujuan.com (Pilih dari Kontak atau ketik baru)" 
                                class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
+                        <datalist id="compose-saved-contacts">
+                            @foreach($savedContactsList as $sc)
+                                <option value="{{ $sc->email }}">{{ $sc->name ? $sc->name . ' (' . $sc->email . ')' : $sc->email }}</option>
+                            @endforeach
+                        </datalist>
                         @error('composeTo') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
                     </div>
 
@@ -2909,7 +3352,106 @@ new class extends Component
                 </form>
                 @endif
             </div>
+        </div>
+    </div>
+    @endif
 
+    <!-- Modal Tambah / Edit Kontak (Address Book) -->
+    @if($showContactModal)
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-2xl my-auto">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-600/25">
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-white">
+                            {{ $editingContactId ? 'Edit Kontak' : 'Tambah Kontak Baru' }}
+                        </h4>
+                        <span class="text-[10px] text-slate-500">Tersimpan ke buku kontak mailbox</span>
+                    </div>
+                </div>
+                <button type="button" wire:click="closeContactModal" class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <form wire:submit.prevent="saveContact" class="p-6 space-y-4 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1.5">
+                        Nama Lengkap / Panggilan
+                    </label>
+                    <input type="text" 
+                           wire:model="contactName" 
+                           placeholder="Contoh: Budi Santoso" 
+                           class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner">
+                    @error('contactName') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1.5">
+                        Alamat Email <span class="text-rose-400">*</span>
+                    </label>
+                    <input type="email" 
+                           wire:model="contactEmail" 
+                           placeholder="budi@perusahaan.com" 
+                           class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner font-mono">
+                    @error('contactEmail') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">
+                            Nomor Telepon / WhatsApp
+                        </label>
+                        <input type="text" 
+                               wire:model="contactPhone" 
+                               placeholder="081234567890" 
+                               class="w-full px-3.5 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner font-mono">
+                        @error('contactPhone') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-300 mb-1.5">
+                            Perusahaan / Instansi
+                        </label>
+                        <input type="text" 
+                               wire:model="contactCompany" 
+                               placeholder="PT Solusi Digital" 
+                               class="w-full px-3.5 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner">
+                        @error('contactCompany') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-300 mb-1.5">
+                        Catatan Tambahan
+                    </label>
+                    <textarea wire:model="contactNotes" 
+                              rows="2" 
+                              placeholder="Catatan kecil mengenai kontak ini..." 
+                              class="w-full px-4 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-inner resize-none"></textarea>
+                    @error('contactNotes') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                    <button type="button" 
+                            wire:click="closeContactModal" 
+                            class="px-4 py-2 text-slate-400 hover:text-white font-medium cursor-pointer">
+                        Batal
+                    </button>
+                    <button type="submit" 
+                            class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center gap-2 cursor-pointer">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        <span wire:loading.remove wire:target="saveContact">{{ $editingContactId ? 'Simpan Perubahan' : 'Simpan Kontak' }}</span>
+                        <span wire:loading wire:target="saveContact">Menyimpan...</span>
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
     @endif

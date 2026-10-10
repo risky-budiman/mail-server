@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\VirtualUser;
 use App\Models\VirtualAlias;
 use App\Models\MailboxEmail;
+use App\Models\MailboxContact;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
@@ -135,6 +136,11 @@ class ReceiveInboundMail extends Command
                 'body' => $extracted['body'],
                 'attachments' => $userAttachments,
             ]);
+
+            // Otomatis simpan kontak yang pernah berkomunikasi
+            if ($fromEmail && $fromEmail !== 'unknown@domain.com') {
+                MailboxContact::recordCommunication($user->id, $fromEmail, $fromName);
+            }
 
             // Sinkronkan kapasitas disk usage
             $actualBytes = strlen($extracted['body']);
