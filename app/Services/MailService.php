@@ -70,11 +70,52 @@ class MailService
      * Mendukung lampiran file (PDF, Dokumen Office, Gambar, Zip, dll)
      * @param array $attachments Array of file paths or uploaded files or ['path' => string, 'name' => string]
      */
-    public static function sendOutboundMail(string $fromEmail, string $fromName, string $to, string $subject, string $bodyContent, array $attachments = []): bool
-    {
+    public static function sendOutboundMail(
+        string $fromEmail,
+        string $fromName,
+        string|array $to,
+        string $subject,
+        string $bodyContent,
+        array $attachments = [],
+        string|array $cc = '',
+        string|array $bcc = ''
+    ): bool {
         $domain = explode('@', $fromEmail)[1] ?? 'sahabatit.my.id';
         $messageId = '<' . time() . '.' . bin2hex(random_bytes(8)) . '@' . $domain . '>';
         $dateRfc2822 = date('r');
+
+        $normalize = function($input) {
+            if (is_array($input)) {
+                $raw = implode(', ', $input);
+            } else {
+                $raw = (string)$input;
+            }
+            $parts = preg_split('/[,;]+/', $raw);
+            $clean = [];
+            foreach ($parts as $p) {
+                $p = trim($p);
+                if ($p !== '') {
+                    $clean[] = $p;
+                }
+            }
+            return array_values(array_unique($clean));
+        };
+
+        $toList = $normalize($to);
+        $ccList = $normalize($cc);
+        $bccList = $normalize($bcc);
+
+        $toHeader = implode(', ', $toList);
+        $ccHeader = implode(', ', $ccList);
+        $bccHeader = implode(', ', $bccList);
+
+        $recipientHeaderStr = "To: {$toHeader}\r\n";
+        if (!empty($ccHeader)) {
+            $recipientHeaderStr .= "Cc: {$ccHeader}\r\n";
+        }
+        if (!empty($bccHeader)) {
+            $recipientHeaderStr .= "Bcc: {$bccHeader}\r\n";
+        }
 
         // 1. Pada Linux VPS dengan Postfix (/usr/sbin/sendmail), gunakan pipe biner langsung ke engine Postfix
         // Ini memastikan email langsung masuk ke antrean Postfix tanpa terhalang setelan MAIL_MAILER=log di .env
@@ -107,7 +148,7 @@ class MailService
 
                 if (!empty($attachments)) {
                     $headers .= "Content-Type: multipart/mixed; boundary=\"{$mixedBoundary}\"\r\n";
-                    $rawMsg = "To: {$to}\r\n" .
+                    $rawMsg = $recipientHeaderStr .
                               "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n" .
                               $headers . "\r\n" .
                               "--{$mixedBoundary}\r\n" .
@@ -147,7 +188,7 @@ class MailService
                     $rawMsg .= "--{$mixedBoundary}--\r\n";
                 } else {
                     $headers .= "Content-Type: multipart/alternative; boundary=\"{$altBoundary}\"\r\n";
-                    $rawMsg = "To: {$to}\r\n" .
+                    $rawMsg = $recipientHeaderStr .
                               "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n" .
                               $headers . "\r\n" .
                               $alternativeBody;
@@ -159,7 +200,7 @@ class MailService
                     fwrite($pipe, $rawMsg);
                     $returnCode = pclose($pipe);
                     if ($returnCode === 0) {
-                        Log::info("Email berhasil diserahkan ke Postfix via /usr/sbin/sendmail untuk: {$to}");
+                        Log::info("Email berhasil diserahkan ke Postfix via /usr/sbin/sendmail untuk: {$toHeader} (CC: {$ccHeader}, BCC: {$bccHeader})");
                         return true;
                     }
                 }
@@ -176,12 +217,20 @@ class MailService
                 $htmlBody = nl2br(htmlspecialchars($bodyContent, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
                 $formattedHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='font-family: sans-serif; font-size: 14px; color: #333; line-height: 1.6;'>{$htmlBody}</body></html>";
 
-                Mail::mailer($configuredMailer)->send([], [], function ($message) use ($fromEmail, $fromName, $to, $subject, $messageId, $attachments, $plainText, $formattedHtml) {
+                Mail::mailer($configuredMailer)->send([], [], function ($message) use ($fromEmail, $fromName, $toList, $ccList, $bccList, $subject, $messageId, $attachments, $plainText, $formattedHtml) {
                     $message->from($fromEmail, $fromName)
-                            ->to($to)
+                            ->to($toList)
                             ->subject($subject)
                             ->text($plainText)
                             ->html($formattedHtml);
+
+                    if (!empty($ccList)) {
+                        $message->cc($ccList);
+                    }
+                    if (!empty($bccList)) {
+                        $message->bcc($bccList);
+                    }
+
                     $message->getHeaders()->addIdHeader('Message-ID', $messageId);
 
                     // Lampirkan file jika ada
@@ -222,7 +271,15 @@ class MailService
                        "MIME-Version: 1.0\r\n" .
                        "Content-Type: text/plain; charset=UTF-8\r\n" .
                        "X-Mailer: PHP/" . phpversion();
-            return @mail($to, $subject, $bodyContent, $headers, "-f " . $fromEmail);
+
+            if (!empty($ccHeader)) {
+                $headers .= "\r\nCc: {$ccHeader}";
+            }
+            if (!empty($bccHeader)) {
+                $headers .= "\r\nBcc: {$bccHeader}";
+            }
+
+            return @mail($toHeader, $subject, $bodyContent, $headers, "-f " . $fromEmail);
         } catch (\Throwable $lastEx) {
             Log::error("Final mail() fallback failed: " . $lastEx->getMessage());
             return false;

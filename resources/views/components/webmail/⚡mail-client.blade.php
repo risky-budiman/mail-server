@@ -1287,15 +1287,80 @@ new class extends Component
         $this->reset(['composeTo', 'composeCc', 'composeBcc', 'composeSubject', 'composeBody', 'attachments', 'editingDraftId']);
     }
 
+    protected function parseEmailList($input): array
+    {
+        if (is_array($input)) {
+            $items = $input;
+        } else {
+            $items = preg_split('/[,;]+/', (string)$input);
+        }
+        $emails = [];
+        foreach ($items as $item) {
+            $item = trim($item);
+            if (empty($item)) continue;
+            if (preg_match('/<([^>]+)>/', $item, $matches)) {
+                $email = trim($matches[1]);
+            } else {
+                $email = $item;
+            }
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $emails[] = $email;
+            }
+        }
+        return array_values(array_unique($emails));
+    }
+
+    protected function validateEmailList($input): ?string
+    {
+        if (empty(trim((string)$input))) return null;
+        $items = preg_split('/[,;]+/', (string)$input);
+        foreach ($items as $item) {
+            $item = trim($item);
+            if (empty($item)) continue;
+            if (preg_match('/<([^>]+)>/', $item, $matches)) {
+                $email = trim($matches[1]);
+            } else {
+                $email = $item;
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return "Format alamat email '{$item}' tidak valid.";
+            }
+        }
+        return null;
+    }
+
     public function sendEmail()
     {
         $this->validate([
-            'composeTo' => 'required|email',
-            'composeCc' => 'nullable|email',
-            'composeBcc' => 'nullable|email',
             'composeSubject' => 'required|string|max:255',
             'composeBody' => 'required|string',
         ]);
+
+        $toEmails = $this->parseEmailList($this->composeTo);
+        if (empty($toEmails)) {
+            $this->addError('composeTo', 'Masukkan setidaknya 1 alamat email tujuan yang valid.');
+            return;
+        }
+
+        $toErr = $this->validateEmailList($this->composeTo);
+        if ($toErr) {
+            $this->addError('composeTo', $toErr);
+            return;
+        }
+
+        $ccEmails = $this->parseEmailList($this->composeCc);
+        $ccErr = $this->validateEmailList($this->composeCc);
+        if ($ccErr) {
+            $this->addError('composeCc', $ccErr);
+            return;
+        }
+
+        $bccEmails = $this->parseEmailList($this->composeBcc);
+        $bccErr = $this->validateEmailList($this->composeBcc);
+        if ($bccErr) {
+            $this->addError('composeBcc', $bccErr);
+            return;
+        }
 
         $user = $this->getAccount();
         if (!$user) return;
@@ -1341,10 +1406,12 @@ new class extends Component
         \App\Services\MailService::sendOutboundMail(
             $fromEmail,
             $fromName,
-            $this->composeTo,
+            implode(', ', $toEmails),
             $this->composeSubject,
             $this->composeBody,
-            $savedAttachments
+            $savedAttachments,
+            implode(', ', $ccEmails),
+            implode(', ', $bccEmails)
         );
 
         MailboxEmail::create([
@@ -1352,7 +1419,7 @@ new class extends Component
             'folder' => 'sent',
             'from_name' => $fromName,
             'from_email' => $fromEmail,
-            'to' => $this->composeTo,
+            'to' => implode(', ', $toEmails),
             'subject' => $this->composeSubject,
             'date_human' => 'Baru saja',
             'is_read' => true,
@@ -1361,15 +1428,9 @@ new class extends Component
             'attachments' => $savedAttachments,
         ]);
 
-        // Otomatis simpan kontak yang diajak berkomunikasi
-        if (!empty($this->composeTo)) {
-            MailboxContact::recordCommunication($user->id, $this->composeTo);
-        }
-        if (!empty($this->composeCc)) {
-            MailboxContact::recordCommunication($user->id, $this->composeCc);
-        }
-        if (!empty($this->composeBcc)) {
-            MailboxContact::recordCommunication($user->id, $this->composeBcc);
+        // Otomatis simpan seluruh penerima (To, Cc, Bcc) ke buku kontak
+        foreach (array_merge($toEmails, $ccEmails, $bccEmails) as $recipient) {
+            MailboxContact::recordCommunication($user->id, $recipient);
         }
 
         $actualBytes = $this->calculateActualEmailsBytes();
@@ -3015,42 +3076,400 @@ new class extends Component
                             @endforeach
                         </select>
                     </div>
-                    @endif
+                    @endif                    <!-- Recipient Fields Section (Gaya Gmail: Multi-Email Chips, Cc/Bcc Toggle & Auto-Suggest) -->
+                    <div x-data="{
+                        allContacts: {{ json_encode($savedContactsList->map(fn($c) => ['name' => $c->name ?: '', 'email' => $c->email])->values()) }},
+                        showCc: {{ !empty($composeCc) ? 'true' : 'false' }},
+                        showBcc: {{ !empty($composeBcc) ? 'true' : 'false' }},
+                        init() {
+                            this.$watch('$wire.composeCc', (val) => { if (val && val.trim()) this.showCc = true; });
+                            this.$watch('$wire.composeBcc', (val) => { if (val && val.trim()) this.showBcc = true; });
+                        }
+                    }" class="space-y-2.5">
 
-                    <div>
-                        <div class="flex items-center justify-between mb-1.5">
-                            <label class="block text-xs font-bold text-slate-300">Kepada (To)</label>
-                            <button type="button" wire:click="$toggle('showCcBcc')" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer">
-                                {{ $showCcBcc ? 'Sembunyikan CC/BCC' : '+ Tambah CC / BCC' }}
-                            </button>
-                        </div>
-                        <input type="email" 
-                               list="compose-saved-contacts"
-                               wire:model="composeTo" 
-                               placeholder="alamat@tujuan.com (Pilih dari Kontak atau ketik baru)" 
-                               class="w-full px-4 py-2.5 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 shadow-inner">
-                        <datalist id="compose-saved-contacts">
-                            @foreach($savedContactsList as $sc)
-                                <option value="{{ $sc->email }}">{{ $sc->name ? $sc->name . ' (' . $sc->email . ')' : $sc->email }}</option>
-                            @endforeach
-                        </datalist>
-                        @error('composeTo') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
-                    </div>
+                        <!-- 1. Baris KEPADA (TO) Gaya Gmail -->
+                        <div x-data="{
+                            chips: [],
+                            inputVal: '',
+                            showSug: false,
+                            init() {
+                                this.syncFromWire();
+                                this.$watch('$wire.composeTo', () => this.syncFromWire());
+                            },
+                            syncFromWire() {
+                                let val = $wire.composeTo || '';
+                                let parts = val.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+                                if (parts.join(', ') !== this.chips.join(', ')) {
+                                    this.chips = parts;
+                                }
+                            },
+                            syncToWire() {
+                                $wire.composeTo = this.chips.join(', ');
+                            },
+                            addChip(raw) {
+                                let text = (raw || this.inputVal || '').trim();
+                                if (!text) return;
+                                let items = text.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+                                items.forEach(item => {
+                                    let m = item.match(/<([^>]+)>/);
+                                    let clean = m ? m[1].trim() : item;
+                                    if (clean && !this.chips.includes(clean)) {
+                                        this.chips.push(clean);
+                                    }
+                                });
+                                this.inputVal = '';
+                                this.showSug = false;
+                                this.syncToWire();
+                                this.$nextTick(() => this.$refs.toInput && this.$refs.toInput.focus());
+                            },
+                            removeChip(idx) {
+                                this.chips.splice(idx, 1);
+                                this.syncToWire();
+                                this.$nextTick(() => this.$refs.toInput && this.$refs.toInput.focus());
+                            },
+                            handleKeyDown(e) {
+                                if (['Enter', ',', 'Tab'].includes(e.key)) {
+                                    e.preventDefault();
+                                    this.addChip();
+                                } else if (e.key === 'Backspace' && !this.inputVal && this.chips.length > 0) {
+                                    this.removeChip(this.chips.length - 1);
+                                }
+                            },
+                            handlePaste(e) {
+                                let paste = (e.clipboardData || window.clipboardData).getData('text');
+                                if (paste && (paste.includes(',') || paste.includes(';') || paste.includes('\n') || paste.includes(' '))) {
+                                    e.preventDefault();
+                                    this.addChip(paste);
+                                }
+                            },
+                            get suggestions() {
+                                if (!this.inputVal || this.inputVal.length < 1) return [];
+                                let q = this.inputVal.toLowerCase();
+                                return allContacts.filter(c => 
+                                    (c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))) &&
+                                    !this.chips.includes(c.email)
+                                ).slice(0, 6);
+                            }
+                        }">
+                            <label class="block text-xs font-bold text-slate-300 mb-1">Kepada (To)</label>
+                            <div class="relative flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/90 border border-slate-700/80 rounded-xl focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner cursor-text"
+                                 @click="$refs.toInput && $refs.toInput.focus()">
+                                
+                                <!-- Chips Penerima -->
+                                <template x-for="(chip, idx) in chips" :key="idx">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-cyan-500/30 text-cyan-200 text-xs shadow-sm font-medium">
+                                        <svg class="w-3 h-3 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                        <span x-text="chip" class="max-w-[180px] sm:max-w-xs truncate"></span>
+                                        <button type="button" 
+                                                @click.stop="removeChip(idx)" 
+                                                class="p-0.5 rounded-full hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer" 
+                                                title="Hapus email ini">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </span>
+                                </template>
 
-                    @if($showCcBcc)
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-300 mb-1">CC</label>
-                            <input type="email" wire:model="composeCc" placeholder="cc@domain.com" 
-                                   class="w-full px-4 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+                                <!-- Text Input Inline -->
+                                <input type="text"
+                                       x-ref="toInput"
+                                       x-model="inputVal"
+                                       @keydown="handleKeyDown($event)"
+                                       @paste="handlePaste($event)"
+                                       @blur="setTimeout(() => { addChip(); showSug = false; }, 200)"
+                                       @focus="showSug = true"
+                                       :placeholder="chips.length === 0 ? 'Ketik email (Enter atau koma untuk menambah)...' : 'Tambah email lain...'"
+                                       class="flex-1 min-w-[150px] bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-1">
+
+                                <!-- Tombol Cc & Bcc di kanan (Gaya Gmail) -->
+                                <div class="flex items-center gap-1.5 pr-1 ml-auto shrink-0 select-none">
+                                    <button type="button" 
+                                            x-show="!showCc" 
+                                            @click.stop="showCc = true" 
+                                            class="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                                            title="Tampilkan kolom CC (Tembusan)">
+                                        Cc
+                                    </button>
+                                    <button type="button" 
+                                            x-show="!showBcc" 
+                                            @click.stop="showBcc = true" 
+                                            class="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                                            title="Tampilkan kolom BCC (Tembusan Rahasia)">
+                                        Bcc
+                                    </button>
+                                </div>
+
+                                <!-- Dropdown Auto-Suggest Kontak -->
+                                <div x-show="showSug && suggestions.length > 0"
+                                     @click.outside="showSug = false"
+                                     class="absolute left-0 top-full mt-1 w-full sm:w-80 max-h-52 overflow-y-auto bg-slate-900/95 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 divide-y divide-slate-800 backdrop-blur-md">
+                                    <template x-for="(sug, sIdx) in suggestions" :key="sIdx">
+                                        <div @mousedown.prevent="addChip(sug.email)"
+                                             class="px-3.5 py-2 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs transition-colors group">
+                                            <div class="flex items-center gap-2 truncate">
+                                                <div class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                    <span x-text="(sug.name || sug.email).charAt(0).toUpperCase()"></span>
+                                                </div>
+                                                <div class="truncate text-left">
+                                                    <div class="text-white font-medium truncate group-hover:text-cyan-300" x-text="sug.name || sug.email"></div>
+                                                    <div class="text-[10px] text-slate-400 font-mono truncate" x-show="sug.name" x-text="sug.email"></div>
+                                                </div>
+                                            </div>
+                                            <span class="text-[10px] text-cyan-400 font-semibold shrink-0">+ Pilih</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            @error('composeTo') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-300 mb-1">BCC</label>
-                            <input type="email" wire:model="composeBcc" placeholder="bcc@domain.com" 
-                                   class="w-full px-4 py-2 bg-slate-950/90 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+
+                        <!-- 2. Baris CC (Gaya Gmail) -->
+                        <div x-show="showCc" x-collapse x-data="{
+                            chips: [],
+                            inputVal: '',
+                            showSug: false,
+                            init() {
+                                this.syncFromWire();
+                                this.$watch('$wire.composeCc', () => this.syncFromWire());
+                            },
+                            syncFromWire() {
+                                let val = $wire.composeCc || '';
+                                let parts = val.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+                                if (parts.join(', ') !== this.chips.join(', ')) {
+                                    this.chips = parts;
+                                }
+                            },
+                            syncToWire() {
+                                $wire.composeCc = this.chips.join(', ');
+                            },
+                            addChip(raw) {
+                                let text = (raw || this.inputVal || '').trim();
+                                if (!text) return;
+                                let items = text.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+                                items.forEach(item => {
+                                    let m = item.match(/<([^>]+)>/);
+                                    let clean = m ? m[1].trim() : item;
+                                    if (clean && !this.chips.includes(clean)) {
+                                        this.chips.push(clean);
+                                    }
+                                });
+                                this.inputVal = '';
+                                this.showSug = false;
+                                this.syncToWire();
+                                this.$nextTick(() => this.$refs.ccInput && this.$refs.ccInput.focus());
+                            },
+                            removeChip(idx) {
+                                this.chips.splice(idx, 1);
+                                this.syncToWire();
+                                this.$nextTick(() => this.$refs.ccInput && this.$refs.ccInput.focus());
+                            },
+                            handleKeyDown(e) {
+                                if (['Enter', ',', 'Tab'].includes(e.key)) {
+                                    e.preventDefault();
+                                    this.addChip();
+                                } else if (e.key === 'Backspace' && !this.inputVal && this.chips.length > 0) {
+                                    this.removeChip(this.chips.length - 1);
+                                }
+                            },
+                            handlePaste(e) {
+                                let paste = (e.clipboardData || window.clipboardData).getData('text');
+                                if (paste && (paste.includes(',') || paste.includes(';') || paste.includes('\n') || paste.includes(' '))) {
+                                    e.preventDefault();
+                                    this.addChip(paste);
+                                }
+                            },
+                            get suggestions() {
+                                if (!this.inputVal || this.inputVal.length < 1) return [];
+                                let q = this.inputVal.toLowerCase();
+                                return allContacts.filter(c => 
+                                    (c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))) &&
+                                    !this.chips.includes(c.email)
+                                ).slice(0, 6);
+                            }
+                        }">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-bold text-slate-300">CC (Tembusan)</label>
+                                <button type="button" @click="showCc = false; chips = []; syncToWire()" class="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer">
+                                    Tutup CC
+                                </button>
+                            </div>
+                            <div class="relative flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/90 border border-slate-700/80 rounded-xl focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner cursor-text"
+                                 @click="$refs.ccInput && $refs.ccInput.focus()">
+                                
+                                <template x-for="(chip, idx) in chips" :key="idx">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-cyan-500/30 text-cyan-200 text-xs shadow-sm font-medium">
+                                        <svg class="w-3 h-3 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                        <span x-text="chip" class="max-w-[180px] sm:max-w-xs truncate"></span>
+                                        <button type="button" 
+                                                @click.stop="removeChip(idx)" 
+                                                class="p-0.5 rounded-full hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer" 
+                                                title="Hapus email ini">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </span>
+                                </template>
+
+                                <input type="text"
+                                       x-ref="ccInput"
+                                       x-model="inputVal"
+                                       @keydown="handleKeyDown($event)"
+                                       @paste="handlePaste($event)"
+                                       @blur="setTimeout(() => { addChip(); showSug = false; }, 200)"
+                                       @focus="showSug = true"
+                                       :placeholder="chips.length === 0 ? 'cc@domain.com (Enter atau koma untuk menambah)...' : 'Tambah CC lain...'"
+                                       class="flex-1 min-w-[150px] bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-1">
+
+                                <div class="flex items-center gap-1.5 pr-1 ml-auto shrink-0 select-none">
+                                    <button type="button" 
+                                            x-show="!showBcc" 
+                                            @click.stop="showBcc = true" 
+                                            class="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                                            title="Tampilkan kolom BCC (Tembusan Rahasia)">
+                                        Bcc
+                                    </button>
+                                </div>
+
+                                <div x-show="showSug && suggestions.length > 0"
+                                     @click.outside="showSug = false"
+                                     class="absolute left-0 top-full mt-1 w-full sm:w-80 max-h-52 overflow-y-auto bg-slate-900/95 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 divide-y divide-slate-800 backdrop-blur-md">
+                                    <template x-for="(sug, sIdx) in suggestions" :key="sIdx">
+                                        <div @mousedown.prevent="addChip(sug.email)"
+                                             class="px-3.5 py-2 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs transition-colors group">
+                                            <div class="flex items-center gap-2 truncate">
+                                                <div class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                    <span x-text="(sug.name || sug.email).charAt(0).toUpperCase()"></span>
+                                                </div>
+                                                <div class="truncate text-left">
+                                                    <div class="text-white font-medium truncate group-hover:text-cyan-300" x-text="sug.name || sug.email"></div>
+                                                    <div class="text-[10px] text-slate-400 font-mono truncate" x-show="sug.name" x-text="sug.email"></div>
+                                                </div>
+                                            </div>
+                                            <span class="text-[10px] text-cyan-400 font-semibold shrink-0">+ Pilih</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            @error('composeCc') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        </div>
+
+                        <!-- 3. Baris BCC (Gaya Gmail) -->
+                        <div x-show="showBcc" x-collapse x-data="{
+                            chips: [],
+                            inputVal: '',
+                            showSug: false,
+                            init() {
+                                this.syncFromWire();
+                                this.$watch('$wire.composeBcc', () => this.syncFromWire());
+                            },
+                            syncFromWire() {
+                                let val = $wire.composeBcc || '';
+                                let parts = val.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+                                if (parts.join(', ') !== this.chips.join(', ')) {
+                                    this.chips = parts;
+                                }
+                            },
+                            syncToWire() {
+                                $wire.composeBcc = this.chips.join(', ');
+                            },
+                            addChip(raw) {
+                                let text = (raw || this.inputVal || '').trim();
+                                if (!text) return;
+                                let items = text.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+                                items.forEach(item => {
+                                    let m = item.match(/<([^>]+)>/);
+                                    let clean = m ? m[1].trim() : item;
+                                    if (clean && !this.chips.includes(clean)) {
+                                        this.chips.push(clean);
+                                    }
+                                });
+                                this.inputVal = '';
+                                this.showSug = false;
+                                this.syncToWire();
+                                this.$nextTick(() => this.$refs.bccInput && this.$refs.bccInput.focus());
+                            },
+                            removeChip(idx) {
+                                this.chips.splice(idx, 1);
+                                this.syncToWire();
+                                this.$nextTick(() => this.$refs.bccInput && this.$refs.bccInput.focus());
+                            },
+                            handleKeyDown(e) {
+                                if (['Enter', ',', 'Tab'].includes(e.key)) {
+                                    e.preventDefault();
+                                    this.addChip();
+                                } else if (e.key === 'Backspace' && !this.inputVal && this.chips.length > 0) {
+                                    this.removeChip(this.chips.length - 1);
+                                }
+                            },
+                            handlePaste(e) {
+                                let paste = (e.clipboardData || window.clipboardData).getData('text');
+                                if (paste && (paste.includes(',') || paste.includes(';') || paste.includes('\n') || paste.includes(' '))) {
+                                    e.preventDefault();
+                                    this.addChip(paste);
+                                }
+                            },
+                            get suggestions() {
+                                if (!this.inputVal || this.inputVal.length < 1) return [];
+                                let q = this.inputVal.toLowerCase();
+                                return allContacts.filter(c => 
+                                    (c.email.toLowerCase().includes(q) || (c.name && c.name.toLowerCase().includes(q))) &&
+                                    !this.chips.includes(c.email)
+                                ).slice(0, 6);
+                            }
+                        }">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-bold text-slate-300">BCC (Tembusan Rahasia)</label>
+                                <button type="button" @click="showBcc = false; chips = []; syncToWire()" class="text-[10px] text-slate-400 hover:text-rose-400 cursor-pointer">
+                                    Tutup BCC
+                                </button>
+                            </div>
+                            <div class="relative flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/90 border border-slate-700/80 rounded-xl focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500 transition-all shadow-inner cursor-text"
+                                 @click="$refs.bccInput && $refs.bccInput.focus()">
+                                
+                                <template x-for="(chip, idx) in chips" :key="idx">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-cyan-500/30 text-cyan-200 text-xs shadow-sm font-medium">
+                                        <svg class="w-3 h-3 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                        <span x-text="chip" class="max-w-[180px] sm:max-w-xs truncate"></span>
+                                        <button type="button" 
+                                                @click.stop="removeChip(idx)" 
+                                                class="p-0.5 rounded-full hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer" 
+                                                title="Hapus email ini">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </span>
+                                </template>
+
+                                <input type="text"
+                                       x-ref="bccInput"
+                                       x-model="inputVal"
+                                       @keydown="handleKeyDown($event)"
+                                       @paste="handlePaste($event)"
+                                       @blur="setTimeout(() => { addChip(); showSug = false; }, 200)"
+                                       @focus="showSug = true"
+                                       :placeholder="chips.length === 0 ? 'bcc@domain.com (Enter atau koma untuk menambah)...' : 'Tambah BCC lain...'"
+                                       class="flex-1 min-w-[150px] bg-transparent border-none text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-1">
+
+                                <div x-show="showSug && suggestions.length > 0"
+                                     @click.outside="showSug = false"
+                                     class="absolute left-0 top-full mt-1 w-full sm:w-80 max-h-52 overflow-y-auto bg-slate-900/95 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 divide-y divide-slate-800 backdrop-blur-md">
+                                    <template x-for="(sug, sIdx) in suggestions" :key="sIdx">
+                                        <div @mousedown.prevent="addChip(sug.email)"
+                                             class="px-3.5 py-2 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs transition-colors group">
+                                            <div class="flex items-center gap-2 truncate">
+                                                <div class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                                    <span x-text="(sug.name || sug.email).charAt(0).toUpperCase()"></span>
+                                                </div>
+                                                <div class="truncate text-left">
+                                                    <div class="text-white font-medium truncate group-hover:text-cyan-300" x-text="sug.name || sug.email"></div>
+                                                    <div class="text-[10px] text-slate-400 font-mono truncate" x-show="sug.name" x-text="sug.email"></div>
+                                                </div>
+                                            </div>
+                                            <span class="text-[10px] text-cyan-400 font-semibold shrink-0">+ Pilih</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            @error('composeBcc') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
                         </div>
                     </div>
-                    @endif
 
                     <div>
                         <label class="block text-xs font-bold text-slate-300 mb-1.5">Subjek Pesan</label>

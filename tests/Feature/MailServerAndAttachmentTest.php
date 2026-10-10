@@ -146,5 +146,59 @@ class MailServerAndAttachmentTest extends TestCase
             'subject' => 'Lampiran Multi Format',
         ]);
     }
+
+    public function test_send_email_with_multiple_recipients_to_cc_and_bcc()
+    {
+        $domain = VirtualDomain::create(['name' => 'perusahaan.co.id', 'is_active' => true]);
+        $user = VirtualUser::create([
+            'domain_id' => $domain->id,
+            'email' => 'admin@perusahaan.co.id',
+            'password' => bcrypt('secret123'),
+            'maildir_path' => 'perusahaan.co.id/admin/',
+            'quota_bytes' => 1073741824,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user, 'mailbox');
+
+        \Livewire\Livewire::test('webmail.mail-client')
+            ->set('composeTo', 'client1@example.com, client2@example.com')
+            ->set('composeCc', 'manager@example.com, supervisor@example.com')
+            ->set('composeBcc', 'audit@example.com')
+            ->set('composeSubject', 'Pemberitahuan Proyek Multi Penerima')
+            ->set('composeBody', 'Halo semua, berikut laporan proyek.')
+            ->call('sendEmail')
+            ->assertHasNoErrors();
+
+        // 1. Verifikasi email tersimpan di folder sent dengan penerima To gabungan
+        $this->assertDatabaseHas('mailbox_emails', [
+            'virtual_user_id' => $user->id,
+            'folder' => 'sent',
+            'to' => 'client1@example.com, client2@example.com',
+            'subject' => 'Pemberitahuan Proyek Multi Penerima',
+        ]);
+
+        // 2. Verifikasi seluruh penerima To, Cc, dan Bcc otomatis masuk ke buku kontak
+        $this->assertDatabaseHas('mailbox_contacts', [
+            'virtual_user_id' => $user->id,
+            'email' => 'client1@example.com',
+        ]);
+        $this->assertDatabaseHas('mailbox_contacts', [
+            'virtual_user_id' => $user->id,
+            'email' => 'client2@example.com',
+        ]);
+        $this->assertDatabaseHas('mailbox_contacts', [
+            'virtual_user_id' => $user->id,
+            'email' => 'manager@example.com',
+        ]);
+        $this->assertDatabaseHas('mailbox_contacts', [
+            'virtual_user_id' => $user->id,
+            'email' => 'supervisor@example.com',
+        ]);
+        $this->assertDatabaseHas('mailbox_contacts', [
+            'virtual_user_id' => $user->id,
+            'email' => 'audit@example.com',
+        ]);
+    }
 }
 
