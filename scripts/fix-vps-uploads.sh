@@ -11,58 +11,65 @@ fi
 
 
 echo "=================================================================="
-echo " 1. Menyesuaikan Konfigurasi PHP-FPM & CLI (upload_max_filesize 100M)"
+echo " 1. Menyesuaikan Konfigurasi PHP-FPM & CLI (upload_max_filesize 500M / Bebas)"
 echo "=================================================================="
 
 # Update semua file php.ini (fpm, cli, apache2) yang terpasang di sistem
 for INI_FILE in /etc/php/*/*/php.ini; do
     if [ -f "$INI_FILE" ]; then
         echo "--> Memperbarui: $INI_FILE"
-        sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 100M/' "$INI_FILE"
-        sed -i 's/^post_max_size\s*=.*/post_max_size = 100M/' "$INI_FILE"
-        sed -i 's/^memory_limit\s*=.*/memory_limit = 512M/' "$INI_FILE"
-        sed -i 's/^max_execution_time\s*=.*/max_execution_time = 300/' "$INI_FILE"
-        sed -i 's/^max_input_time\s*=.*/max_input_time = 300/' "$INI_FILE"
+        sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 500M/' "$INI_FILE"
+        sed -i 's/^post_max_size\s*=.*/post_max_size = 500M/' "$INI_FILE"
+        sed -i 's/^memory_limit\s*=.*/memory_limit = 1024M/' "$INI_FILE"
+        sed -i 's/^max_execution_time\s*=.*/max_execution_time = 600/' "$INI_FILE"
+        sed -i 's/^max_input_time\s*=.*/max_input_time = 600/' "$INI_FILE"
     fi
 done
 
-# Pastikan pool www.conf juga menerapkan batas upload jika ada
+# Pastikan pool www.conf juga menerapkan batas upload bebas jika ada
 for POOL_FILE in /etc/php/*/fpm/pool.d/www.conf; do
     if [ -f "$POOL_FILE" ]; then
         echo "--> Menyesuaikan PHP-FPM Pool: $POOL_FILE"
-        # Hapus override lama jika ada lalu tambahkan nilai 100M
         sed -i '/php_value\[upload_max_filesize\]/d' "$POOL_FILE"
         sed -i '/php_value\[post_max_size\]/d' "$POOL_FILE"
-        echo "php_value[upload_max_filesize] = 100M" >> "$POOL_FILE"
-        echo "php_value[post_max_size] = 100M" >> "$POOL_FILE"
+        echo "php_value[upload_max_filesize] = 500M" >> "$POOL_FILE"
+        echo "php_value[post_max_size] = 500M" >> "$POOL_FILE"
     fi
 done
 
 echo "=================================================================="
-echo " 2. Menyesuaikan Konfigurasi Nginx (client_max_body_size 100M)"
+echo " 2. Menyesuaikan Konfigurasi Nginx (client_max_body_size 0 / Bebas)"
 echo "=================================================================="
 
-# Pastikan client_max_body_size ada di blok http {} pada /etc/nginx/nginx.conf
+# Di Nginx, nilai 0 mematikan batasan ukuran request body (unlimited)
 if [ -f /etc/nginx/nginx.conf ]; then
     if grep -q "client_max_body_size" /etc/nginx/nginx.conf; then
-        sed -i 's/client_max_body_size.*/client_max_body_size 100M;/' /etc/nginx/nginx.conf
+        sed -i 's/client_max_body_size.*/client_max_body_size 0;/' /etc/nginx/nginx.conf
     else
-        sed -i '/http {/a \    client_max_body_size 100M;' /etc/nginx/nginx.conf
+        sed -i '/http {/a \    client_max_body_size 0;' /etc/nginx/nginx.conf
     fi
-    echo "--> Nginx core /etc/nginx/nginx.conf diset ke 100M."
+    echo "--> Nginx core /etc/nginx/nginx.conf diset ke 0 (unlimited)."
 fi
 
-# Pastikan seluruh file virtual host Nginx juga memiliki client_max_body_size 100M
-for SITE_FILE in /etc/nginx/sites-available/* /etc/nginx/sites-enabled/*; do
+# Set seluruh file virtual host Nginx ke 0 (unlimited)
+for SITE_FILE in /etc/nginx/sites-available/*; do
     if [ -f "$SITE_FILE" ]; then
         if grep -q "client_max_body_size" "$SITE_FILE"; then
-            sed -i 's/client_max_body_size.*/client_max_body_size 100M;/' "$SITE_FILE"
+            sed -i 's/client_max_body_size.*/client_max_body_size 0;/' "$SITE_FILE"
         else
-            sed -i '/server {/a \    client_max_body_size 100M;' "$SITE_FILE"
+            sed -i '/server {/a \    client_max_body_size 0;' "$SITE_FILE"
         fi
-        echo "--> Nginx Virtual Host $SITE_FILE diset ke 100M."
+        echo "--> Nginx Virtual Host $SITE_FILE diset ke 0 (unlimited)."
     fi
 done
+
+# Hapus batasan ukuran pesan di Postfix (0 = unlimited)
+if command -v postconf >/dev/null 2>&1; then
+    postconf -e "message_size_limit = 0"
+    postconf -e "mailbox_size_limit = 0"
+    echo "--> Postfix message_size_limit diset ke 0 (unlimited)."
+fi
+
 
 echo "=================================================================="
 echo " 3. Memperbaiki Izin Folder Storage & Upload Sementara Livewire"

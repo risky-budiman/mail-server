@@ -130,7 +130,7 @@ return [
 
     'temporary_file_upload' => [
         'disk' => env('LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK'), // Example: 'local', 's3'             | Default: 'default'
-        'rules' => ['max:102400'],                            // Mengizinkan seluruh jenis file tanpa filter/restriksi hingga 100MB
+        'rules' => ['file'],                                  // Mengizinkan seluruh ukuran file tanpa batasan (unlimited)
         'directory' => null,                                  // Example: 'tmp'                     | Default: 'livewire-tmp'
         'middleware' => null,                                 // Example: 'throttle:5,1'            | Default: 'throttle:60,1'
         'preview_mimes' => [                                  // Supported file types for temporary pre-signed file URLs...
@@ -275,9 +275,10 @@ return [
     */
 
     'payload' => [
-        'max_size' => 100 * 1024 * 1024, // 100MB - maximum request payload size in bytes
+        'max_size' => null,              // Tanpa batasan payload (unlimited)
         'max_nesting_depth' => 10,       // Maximum depth of dot-notation property paths
         'max_calls' => 50,               // Maximum method calls per request
         'max_components' => 200,         // Maximum components per batch request
     ],
+
 ];

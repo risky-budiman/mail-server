@@ -102,10 +102,11 @@ sed -i -E 's/^#?(submission\s+inet\s+n\s+-\s+y\s+-\s+-\s+smtpd)/\1/' /etc/postfi
 sed -i -E 's/^#?(submissions\s+inet\s+n\s+-\s+y\s+-\s+-\s+smtpd)/\1/' /etc/postfix/master.cf
 sed -i -E 's/^#?(smtps\s+inet\s+n\s+-\s+y\s+-\s+-\s+smtpd)/\1/' /etc/postfix/master.cf
 
-# Batas Ukuran Pesan & Lampiran Email (Default 50 MB)
-postconf -e "message_size_limit = 52428800"
+# Batas Ukuran Pesan & Lampiran Email (0 = Unlimited / Tanpa Batas)
+postconf -e "message_size_limit = 0"
 postconf -e "virtual_mailbox_limit = 0"
 postconf -e "mailbox_size_limit = 0"
+
 
 echo "======================================================"
 echo " 6. Konfigurasi Dovecot (Auth, Mailbox & Socket SASL)"
@@ -222,9 +223,10 @@ echo "======================================================"
 for PHP_INI in /etc/php/*/fpm/php.ini; do
     if [ -f "$PHP_INI" ]; then
         echo ">>> Menyesuaikan batas upload di: $PHP_INI"
-        sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 100M/' "$PHP_INI"
-        sed -i 's/^post_max_size\s*=.*/post_max_size = 100M/' "$PHP_INI"
-        sed -i 's/^memory_limit\s*=.*/memory_limit = 256M/' "$PHP_INI"
+        sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 500M/' "$PHP_INI"
+        sed -i 's/^post_max_size\s*=.*/post_max_size = 500M/' "$PHP_INI"
+        sed -i 's/^memory_limit\s*=.*/memory_limit = 1024M/' "$PHP_INI"
+
     fi
 done
 
