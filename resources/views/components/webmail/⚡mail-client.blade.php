@@ -23,8 +23,8 @@ new class extends Component
     public $filterStarred = false;
     public $filterUnread = false;
 
-    // Custom user-created folders (Gaya Hostinger / Gmail Labels)
-    public $customFolders = ['Klien Prioritas', 'Tagihan & Invoice'];
+    // Folder pengguna sesuai kebutuhan (tanpa folder default)
+    public $customFolders = [];
     public $newFolderName = '';
     public $showCreateFolderModal = false;
 
@@ -132,19 +132,8 @@ new class extends Component
         $this->currentAccount = $user;
 
         if ($user) {
-            // 1. Muat folder kustom permanen dari database
-            $dbFolders = MailboxFolder::where('virtual_user_id', $user->id)->pluck('name')->toArray();
-            if (empty($dbFolders)) {
-                foreach (['Klien Prioritas', 'Tagihan & Invoice'] as $f) {
-                    MailboxFolder::create([
-                        'virtual_user_id' => $user->id,
-                        'name' => $f,
-                    ]);
-                }
-                $this->customFolders = ['Klien Prioritas', 'Tagihan & Invoice'];
-            } else {
-                $this->customFolders = $dbFolders;
-            }
+            // 1. Muat folder dari database sesuai yang dibuat pengguna (tanpa folder default)
+            $this->customFolders = MailboxFolder::where('virtual_user_id', $user->id)->pluck('name')->toArray();
 
             // 2. Sinkronkan email riil dari harddisk VPS (/var/vmail) secara teratur (dibatasi 1x per 2 menit agar loading secepat kilat)
             $lastSyncKey = "maildir_last_sync_{$user->id}";
@@ -1548,16 +1537,16 @@ new class extends Component
 ?>
 
 <div class="w-full h-full min-h-0 flex-1 flex flex-col bg-slate-950 overflow-hidden relative select-none"
-     x-data="{ showFolderSidebar: false, mobileEmailOpen: false }">
+     x-data="{ showFolderSidebar: true, showFolderList: true }">
     
     <!-- Top Modern Unified Header (Edge-to-Edge) -->
     <header class="h-14 sm:h-15 px-3 sm:px-5 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between gap-3 shrink-0 z-30">
-        <!-- Left: Hamburger Toggle (Mobile) + Brand Logo + Active Folder Badge -->
+        <!-- Left: Toggle Sidebar (Desktop & Mobile) + Brand Logo + Active Folder Badge -->
         <div class="flex items-center gap-2 sm:gap-3">
-            <!-- Mobile Toggle Folder Button -->
+            <!-- Toggle Folder Sidebar Button (Bisa Hide & Unhide) -->
             <button @click="showFolderSidebar = !showFolderSidebar" 
-                    class="md:hidden p-2 rounded-xl text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-colors" 
-                    title="Menu Folder">
+                    class="p-2 rounded-xl text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center justify-center cursor-pointer" 
+                    :title="showFolderSidebar ? 'Sembunyikan Panel Folder (Hide)' : 'Tampilkan Panel Folder (Unhide)'">
                 <i data-lucide="menu" class="w-5 h-5"></i>
             </button>
 
@@ -1667,21 +1656,21 @@ new class extends Component
              class="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-xs" 
              style="display: none;"></div>
 
-        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, w-64 on Desktop) -->
-        <div :class="showFolderSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-             class="fixed md:static inset-y-0 left-0 w-64 md:w-60 lg:w-64 bg-slate-950 md:bg-slate-950/90 border-r border-slate-800/80 p-3 flex flex-col justify-between shrink-0 z-40 md:z-20 transition-transform duration-200 ease-in-out h-full overflow-hidden shadow-2xl md:shadow-none">
+        <!-- Kolom 1: Folder Navigasi (Bisa Hide dan Unhide di Desktop & Mobile) -->
+        <div :class="showFolderSidebar ? 'translate-x-0 w-64 md:w-60 lg:w-64 p-3 border-r border-slate-800/80 opacity-100' : '-translate-x-full md:translate-x-0 md:w-0 md:p-0 md:border-none md:opacity-0'"
+             class="fixed md:static inset-y-0 left-0 bg-slate-950 md:bg-slate-950/90 flex flex-col justify-between shrink-0 z-40 md:z-20 transition-all duration-300 ease-in-out h-full overflow-hidden shadow-2xl md:shadow-none">
             
             <!-- Tulis Pesan Button at top of Sidebar (Modern Standard like Gmail/Outlook) -->
             <div class="shrink-0 mb-3">
                 <div class="flex items-center justify-between md:hidden pb-2 mb-2 border-b border-slate-800">
-                    <span class="text-xs font-bold text-slate-300">Navigasi Folder</span>
+                    <span class="text-xs font-bold text-slate-300">Folder</span>
                     <button @click="showFolderSidebar = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
 
-                <button wire:click="$set('showComposeModal', true)" @click="showFolderSidebar = false"
-                        class="w-full px-4 py-2.5 bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 hover:shadow-cyan-500/30 hover:scale-[1.01] active:scale-[0.99]">
+                <button wire:click="$set('showComposeModal', true)" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full px-4 py-2.5 bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 hover:shadow-cyan-500/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer">
                     <i data-lucide="edit-3" class="w-4 h-4"></i>
                     <span>Tulis Pesan</span>
                 </button>
@@ -1691,8 +1680,8 @@ new class extends Component
             <div class="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1 pb-2">
 
                 <!-- Kotak Masuk (Inbox) -->
-                <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                <button wire:click="selectFolder('inbox')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'inbox' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'inbox' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-cyan-400' }}">
                             <i data-lucide="inbox" class="w-3.5 h-3.5"></i>
@@ -1707,8 +1696,8 @@ new class extends Component
                 </button>
 
                 <!-- Sent -->
-                <button wire:click="selectFolder('sent')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                <button wire:click="selectFolder('sent')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'sent' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'sent' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-indigo-400' }}">
                             <i data-lucide="send" class="w-3.5 h-3.5"></i>
@@ -1718,8 +1707,8 @@ new class extends Component
                 </button>
 
                 <!-- Drafts -->
-                <button wire:click="selectFolder('drafts')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                <button wire:click="selectFolder('drafts')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'drafts' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'drafts' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-rose-400' }}">
                             <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
@@ -1734,8 +1723,8 @@ new class extends Component
                 </button>
 
                 <!-- Folder Spam -->
-                <button wire:click="selectFolder('spam')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                <button wire:click="selectFolder('spam')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'spam' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'spam' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-amber-400' }}">
                             <i data-lucide="alert-octagon" class="w-3.5 h-3.5"></i>
@@ -1750,8 +1739,8 @@ new class extends Component
                 </button>
 
                 <!-- Trash -->
-                <button wire:click="selectFolder('trash')" @click="showFolderSidebar = false"
-                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group {{ $activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
+                <button wire:click="selectFolder('trash')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                        class="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group cursor-pointer {{ $activeFolder === 'trash' ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200' }}">
                     <div class="flex items-center gap-2.5">
                         <div class="p-1 rounded-lg {{ $activeFolder === 'trash' ? 'bg-white/20' : 'bg-slate-800/50 group-hover:bg-slate-800 text-slate-400' }}">
                             <i data-lucide="trash" class="w-3.5 h-3.5"></i>
@@ -1760,22 +1749,35 @@ new class extends Component
                     </div>
                 </button>
 
-                <!-- Kumpulan Folder Kustom -->
-                <div class="pt-3 mt-2 border-t border-slate-800/80">
+                <!-- Bagian Folder (Bisa Hide & Unhide, Label murni 'Folder', Tanpa Folder Default) -->
+                <div class="pt-3 mt-2 border-t border-slate-800/80" x-data="{ showFolderGroup: true }">
                     <div class="flex items-center justify-between px-2 mb-1.5">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Folder Kustom</span>
-                        <button @click="$wire.set('showCreateFolderModal', true)" 
-                                class="p-1 rounded-lg hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 transition-colors" 
+                        <!-- Label murni 'Folder' dengan toggle chevron hide/unhide -->
+                        <button type="button" 
+                                @click="showFolderGroup = !showFolderGroup" 
+                                class="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-slate-200 uppercase tracking-wider transition-colors select-none group cursor-pointer"
+                                title="Sembunyikan / Tampilkan Daftar Folder">
+                            <i data-lucide="chevron-down" 
+                               class="w-3.5 h-3.5 transition-transform duration-200 text-slate-500 group-hover:text-cyan-400" 
+                               :class="showFolderGroup ? '' : '-rotate-90'"></i>
+                            <span>Folder</span>
+                        </button>
+                        
+                        <!-- Tombol Tambah Folder Baru -->
+                        <button type="button" 
+                                @click="$wire.set('showCreateFolderModal', true)" 
+                                class="p-1 rounded-lg hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer" 
                                 title="Buat Folder Baru">
                             <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
 
-                    <div class="space-y-1">
-                        @foreach($customFolders as $folder)
+                    <!-- Daftar Folder Pengguna (Bisa Hide & Unhide) -->
+                    <div x-show="showFolderGroup" x-collapse class="space-y-1">
+                        @forelse($customFolders as $folder)
                         <div class="group relative flex items-center justify-between rounded-xl transition-all {{ $activeFolder === $folder ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-800/70 hover:text-white' }}">
-                            <button wire:click="selectFolder('{{ $folder }}')" @click="showFolderSidebar = false"
-                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium truncate text-left">
+                            <button wire:click="selectFolder('{{ $folder }}')" @click="if (window.innerWidth < 768) showFolderSidebar = false"
+                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium truncate text-left cursor-pointer">
                                 <i data-lucide="folder" class="w-3.5 h-3.5 {{ $activeFolder === $folder ? 'text-white' : 'text-cyan-400' }} shrink-0"></i>
                                 <span class="truncate">{{ $folder }}</span>
                             </button>
@@ -1784,12 +1786,16 @@ new class extends Component
                             <button type="button" 
                                     wire:click="deleteFolder('{{ $folder }}')" 
                                     wire:confirm="Yakin ingin menghapus folder '{{ $folder }}'? Email di dalamnya akan dipindahkan ke Kotak Masuk."
-                                    class="opacity-0 group-hover:opacity-100 p-1 mr-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0" 
+                                    class="opacity-0 group-hover:opacity-100 p-1 mr-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all shrink-0 cursor-pointer" 
                                     title="Hapus folder {{ $folder }}">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
                         </div>
-                        @endforeach
+                        @empty
+                        <div class="px-2.5 py-2 text-[11px] text-slate-500 italic">
+                            Belum ada folder. Klik <button type="button" class="text-cyan-400 font-semibold hover:underline inline" @click="$wire.set('showCreateFolderModal', true)">+</button> untuk menambah folder.
+                        </div>
+                        @endforelse
                     </div>
                 </div>
             </div>
