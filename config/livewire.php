@@ -130,16 +130,16 @@ return [
 
     'temporary_file_upload' => [
         'disk' => env('LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK'), // Example: 'local', 's3'             | Default: 'default'
-        'rules' => ['file', 'max:51200'],                     // Mendukung dokumen, zip, pdf, foto dll hingga 50MB
+        'rules' => ['max:102400'],                            // Mengizinkan seluruh jenis file tanpa filter/restriksi hingga 100MB
         'directory' => null,                                  // Example: 'tmp'                     | Default: 'livewire-tmp'
         'middleware' => null,                                 // Example: 'throttle:5,1'            | Default: 'throttle:60,1'
         'preview_mimes' => [                                  // Supported file types for temporary pre-signed file URLs...
             'png', 'gif', 'bmp', 'svg', 'wav', 'mp4',
             'mov', 'avi', 'wmv', 'mp3', 'm4a',
             'jpg', 'jpeg', 'mpga', 'webp', 'wma',
-            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'txt',
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', '7z', 'tar', 'gz', 'txt', 'csv', 'json', 'xml', 'iso', 'odt', 'ods',
         ],
-        'max_upload_time' => 15, // Max duration (in minutes) before an upload is invalidated...
+        'max_upload_time' => 30, // Max duration (in minutes) before an upload is invalidated...
         'cleanup' => true, // Should cleanup temporary uploads older than 24 hrs...
     ],
 
@@ -275,9 +275,9 @@ return [
     */
 
     'payload' => [
-        'max_size' => 1024 * 1024,   // 1MB - maximum request payload size in bytes
-        'max_nesting_depth' => 10,   // Maximum depth of dot-notation property paths
-        'max_calls' => 50,           // Maximum method calls per request
-        'max_components' => 200,     // Maximum components per batch request
+        'max_size' => 100 * 1024 * 1024, // 100MB - maximum request payload size in bytes
+        'max_nesting_depth' => 10,       // Maximum depth of dot-notation property paths
+        'max_calls' => 50,               // Maximum method calls per request
+        'max_components' => 200,         // Maximum components per batch request
     ],
 ];

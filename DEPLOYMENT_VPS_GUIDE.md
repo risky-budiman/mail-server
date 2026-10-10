@@ -309,6 +309,7 @@ server {
     listen 80;
     server_name mail.perusahaan.co.id;
     root /var/www/mailids/public;
+    client_max_body_size 100M;
 
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";

@@ -2103,7 +2103,7 @@ new class extends Component
                             @endphp
                             <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900 border border-slate-700/80 hover:border-slate-600 shadow-sm transition-all group">
                                 <!-- Badge Icon Sesuai Ekstensi File -->
-                                <div class="w-8 h-8 rounded-xl {{ $isImage ? 'bg-purple-600 text-white shadow-purple-600/30' : ($isPdf ? 'bg-rose-600 text-white shadow-rose-600/30' : (in_array($extLower, ['doc','docx']) ? 'bg-blue-600 text-white shadow-blue-600/30' : (in_array($extLower, ['xls','xlsx']) ? 'bg-emerald-600 text-white shadow-emerald-600/30' : 'bg-slate-700 text-slate-200'))) }} flex items-center justify-center font-bold text-[10px] tracking-tighter shrink-0 shadow-sm uppercase">
+                                <div class="w-8 h-8 rounded-xl {{ $isImage ? 'bg-purple-600 text-white shadow-purple-600/30' : ($isPdf ? 'bg-rose-600 text-white shadow-rose-600/30' : (in_array($extLower, ['doc','docx']) ? 'bg-blue-600 text-white shadow-blue-600/30' : (in_array($extLower, ['xls','xlsx']) ? 'bg-emerald-600 text-white shadow-emerald-600/30' : (in_array($extLower, ['zip','rar','7z','tar','gz']) ? 'bg-amber-600 text-white shadow-amber-600/30' : (in_array($extLower, ['ppt','pptx']) ? 'bg-orange-600 text-white shadow-orange-600/30' : 'bg-slate-700 text-slate-200'))))) }} flex items-center justify-center font-bold text-[10px] tracking-tighter shrink-0 shadow-sm uppercase">
                                     {{ substr($extLower, 0, 4) }}
                                 </div>
                                 <div class="min-w-0 flex items-center gap-2">
@@ -2458,16 +2458,17 @@ new class extends Component
                                     <button type="button" class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Font Style">
                                         <i data-lucide="type" class="w-3.5 h-3.5"></i>
                                     </button>
-                                    <label class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer" title="Lampirkan Dokumen">
+                                    <label class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer" title="Lampirkan Dokumen (Semua Format: PDF, DOC, XLS, ZIP, RAR, Gambar, dll)">
                                         <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                                        <input type="file" wire:model="quickReplyAttachments" multiple class="hidden">
+                                        <input type="file" wire:model="quickReplyAttachments" multiple accept="*/*" class="hidden">
                                     </label>
                                     <button type="button" class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Sisipkan Link">
                                         <i data-lucide="link" class="w-3.5 h-3.5"></i>
                                     </button>
-                                    <button type="button" class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Sisipkan Gambar">
+                                    <label class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer" title="Sisipkan Gambar (PNG, JPG, WebP, GIF)">
                                         <i data-lucide="image" class="w-3.5 h-3.5"></i>
-                                    </button>
+                                        <input type="file" wire:model="quickReplyAttachments" multiple accept="*/*" class="hidden">
+                                    </label>
                                 </div>
                             </div>
 
@@ -2596,11 +2597,13 @@ new class extends Component
                         <div class="flex items-center justify-between">
                             <label class="cursor-pointer inline-flex items-center gap-2 text-xs text-cyan-400 hover:text-cyan-300 font-semibold py-1.5 px-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 transition-all">
                                 <i data-lucide="paperclip" class="w-4 h-4"></i>
-                                <span>Lampirkan File Dokumen</span>
-                                <input type="file" wire:model="attachments" multiple class="hidden">
+                                <span>Lampirkan Dokumen (Semua Format: PDF, DOC, XLS, ZIP, RAR, Gambar, dll)</span>
+                                <input type="file" wire:model="attachments" multiple accept="*/*" class="hidden">
                             </label>
                             <span wire:loading wire:target="attachments" class="text-[11px] text-amber-400 animate-pulse">Mengunggah file...</span>
                         </div>
+                        @error('attachments') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
+                        @error('attachments.*') <span class="text-xs text-rose-400 mt-1 block font-medium">{{ $message }}</span> @enderror
 
                         @if(!empty($attachments))
                         <div class="flex flex-wrap gap-2 mt-2.5">
