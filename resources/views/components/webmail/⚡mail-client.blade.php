@@ -2460,15 +2460,16 @@ new class extends Component
                                     </button>
                                     <label class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer" title="Lampirkan Dokumen (Semua Format: PDF, DOC, XLS, ZIP, RAR, Gambar, dll)">
                                         <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                                        <input type="file" wire:model="quickReplyAttachments" multiple accept="*/*" class="hidden">
+                                        <input type="file" wire:model="quickReplyAttachments" multiple accept="*/*" onclick="this.value=null" class="hidden">
                                     </label>
                                     <button type="button" class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Sisipkan Link">
                                         <i data-lucide="link" class="w-3.5 h-3.5"></i>
                                     </button>
                                     <label class="p-1.5 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer" title="Sisipkan Gambar (PNG, JPG, WebP, GIF)">
                                         <i data-lucide="image" class="w-3.5 h-3.5"></i>
-                                        <input type="file" wire:model="quickReplyAttachments" multiple accept="*/*" class="hidden">
+                                        <input type="file" wire:model="quickReplyAttachments" multiple accept="*/*" onclick="this.value=null" class="hidden">
                                     </label>
+
                                 </div>
                             </div>
 
@@ -2598,7 +2599,7 @@ new class extends Component
                             <label class="cursor-pointer inline-flex items-center gap-2 text-xs text-cyan-400 hover:text-cyan-300 font-semibold py-1.5 px-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-cyan-500/50 transition-all">
                                 <i data-lucide="paperclip" class="w-4 h-4"></i>
                                 <span>Lampirkan Dokumen (Semua Format: PDF, DOC, XLS, ZIP, RAR, Gambar, dll)</span>
-                                <input type="file" wire:model="attachments" multiple accept="*/*" class="hidden">
+                                <input type="file" wire:model="attachments" multiple accept="*/*" onclick="this.value=null" class="hidden">
                             </label>
                             <span wire:loading wire:target="attachments" class="text-[11px] text-amber-400 animate-pulse">Mengunggah file...</span>
                         </div>
