@@ -340,6 +340,82 @@ new class extends Component
             try {
                 $this->syncContactsFromHistory();
             } catch (\Throwable $e) {}
+
+            // 5. Otomatis bersihkan & perbaiki email historis yang masih memuat unknown@domain.com
+            try {
+                $this->repairExistingUnknownSenders($user);
+            } catch (\Throwable $e) {}
+        }
+    }
+
+    /**
+     * Otomatis bersihkan & perbaiki email historis yang masih memuat unknown@domain.com
+     */
+    protected function repairExistingUnknownSenders(?VirtualUser $user): void
+    {
+        if (!$user) return;
+
+        // 1. Perbaiki email di folder sent yang salah mencatat unknown@domain.com
+        MailboxEmail::where('virtual_user_id', $user->id)
+            ->where('folder', 'sent')
+            ->where(function ($q) {
+                $q->where('from_email', 'unknown@domain.com')
+                  ->orWhere('from_email', 'like', 'unknown@%')
+                  ->orWhereNull('from_email')
+                  ->orWhere('from_email', '');
+            })
+            ->update([
+                'from_email' => $user->email,
+                'from_name'  => $user->name ?: ucwords(explode('@', $user->email)[0]),
+            ]);
+
+        // 2. Perbaiki email di folder lain yang from_email-nya masih unknown@domain.com
+        $unknownEmails = MailboxEmail::where('virtual_user_id', $user->id)
+            ->where(function ($q) {
+                $q->where('from_email', 'unknown@domain.com')
+                  ->orWhere('from_email', 'like', 'unknown@%')
+                  ->orWhere('from_name', 'like', 'unknown@%');
+            })
+            ->take(50)
+            ->get();
+
+        foreach ($unknownEmails as $em) {
+            $foundEmail = null;
+            $foundName = null;
+
+            if (!empty($em->body) && preg_match('/(?:^|\n)From:\s*([^\r\n]+)/i', $em->body, $bm)) {
+                $rawFrom = trim($bm[1]);
+                if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawFrom, $fbm)) {
+                    $nameClean = trim(trim($fbm[1]), '"\' ');
+                    $foundName = $nameClean ? $this->decodeMimeHeader($nameClean) : null;
+                    $foundEmail = strtolower(trim($fbm[2]));
+                } else {
+                    $foundEmail = strtolower(trim($rawFrom, " \t\n\r\0\x0B\"'<>"));
+                }
+            }
+
+            if (empty($foundEmail) && !empty($em->body) && preg_match('/(?:^|\n)Return-Path:\s*<?([^>\r\n]+)>?/i', $em->body, $bm)) {
+                $foundEmail = strtolower(trim($bm[1]));
+            }
+
+            if (!empty($foundEmail) && filter_var($foundEmail, FILTER_VALIDATE_EMAIL) && !str_starts_with($foundEmail, 'unknown@')) {
+                if (empty($foundName)) {
+                    $prefix = explode('@', $foundEmail)[0];
+                    $foundName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
+                }
+                $em->update([
+                    'from_email' => $foundEmail,
+                    'from_name'  => $foundName ?: $em->from_name,
+                ]);
+            } else {
+                $cleanName = ($em->from_name && !str_starts_with($em->from_name, 'unknown@') && strtolower($em->from_name) !== 'pengirim')
+                    ? $em->from_name
+                    : 'Pengirim';
+                $em->update([
+                    'from_email' => '',
+                    'from_name'  => $cleanName,
+                ]);
+            }
         }
     }
 
@@ -426,8 +502,8 @@ new class extends Component
                 $parsed = $this->parseRawRfc822Email($rawContent);
 
                 if ($existingRecord) {
-                    // Jika email sudah pernah disimpan tetapi masih memuat teks boundary berantakan, perbarui sekarang
-                    if (str_contains($existingRecord->body, 'Content-Type: text/')) {
+                    // Jika email sudah pernah disimpan tetapi masih memuat teks boundary berantakan atau from_email unknown, perbarui sekarang
+                    if (str_contains($existingRecord->body, 'Content-Type: text/') || str_starts_with($existingRecord->from_email ?? '', 'unknown@') || empty($existingRecord->from_email)) {
                         $existingRecord->update([
                             'from_name' => $parsed['from_name'] ?: $existingRecord->from_name,
                             'from_email' => $parsed['from_email'] ?: $existingRecord->from_email,
@@ -443,7 +519,7 @@ new class extends Component
                         'virtual_user_id' => $user->id,
                         'folder' => 'inbox',
                         'from_name' => $parsed['from_name'] ?: 'Pengirim',
-                        'from_email' => $parsed['from_email'] ?: 'unknown@domain.com',
+                        'from_email' => $parsed['from_email'] ?: '',
                         'to' => $user->email,
                         'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
                         'date_human' => $parsed['date'] ?: now()->format('d M, H:i'),
@@ -454,7 +530,7 @@ new class extends Component
                     ]);
 
                     // Otomatis simpan pengirim ke kontak
-                    if (!empty($parsed['from_email']) && $parsed['from_email'] !== 'unknown@domain.com') {
+                    if (!empty($parsed['from_email']) && !str_starts_with($parsed['from_email'], 'unknown@')) {
                         MailboxContact::recordCommunication($user->id, $parsed['from_email'], $parsed['from_name']);
                     }
 
@@ -521,12 +597,14 @@ new class extends Component
                 $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
                 $fromEmail = strtolower(trim($m[2]));
             } else {
-                $fromEmail = strtolower(trim($headers['reply-to']));
+                $fromEmail = strtolower(trim($headers['reply-to'], " \t\n\r\0\x0B\"'<>"));
             }
+        } elseif (!empty($headers['return-path'])) {
+            $fromEmail = strtolower(trim($headers['return-path'], " \t\n\r\0\x0B\"'<>"));
         }
 
         if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
-            if (!empty($fromEmail) && $fromEmail !== 'unknown@domain.com') {
+            if (!empty($fromEmail) && !str_starts_with($fromEmail, 'unknown@')) {
                 $prefix = explode('@', $fromEmail)[0];
                 $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
             } else {
@@ -1654,16 +1732,16 @@ new class extends Component
     {
         $clean = $this->decodeMimeHeader($name);
         $cleanLower = strtolower(trim($clean));
-        if (!empty($clean) && !in_array($cleanLower, ['sender', 'pengirim', 'unknown', 'unknown@domain.com', 'from sender', 'form sender'])) {
+        if (!empty($clean) && !in_array($cleanLower, ['sender', 'pengirim', 'unknown', 'unknown@domain.com', 'from sender', 'form sender']) && !str_starts_with($cleanLower, 'unknown@')) {
             return $clean;
         }
 
-        if (!empty($email) && $email !== 'unknown@domain.com') {
+        if (!empty($email) && !str_starts_with($email, 'unknown@') && $email !== 'unknown@domain.com') {
             $prefix = explode('@', $email)[0];
             return ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
         }
 
-        return !empty($clean) ? $clean : 'Pengirim';
+        return (!empty($clean) && !str_starts_with($cleanLower, 'unknown@') && $cleanLower !== 'unknown') ? $clean : 'Pengirim';
     }
 
     /**
@@ -1755,14 +1833,20 @@ new class extends Component
             }
         }
 
-        $filteredEmails = collect($groupedThreads)->map(function ($thread) {
+        $filteredEmails = collect($groupedThreads)->map(function ($thread) use ($user) {
             $item = $thread['primary'];
+            $fEmail = $item->from_email;
+            if ($item->folder === 'sent' && (empty($fEmail) || str_starts_with($fEmail, 'unknown@'))) {
+                $fEmail = $user?->email ?: $fEmail;
+            }
+            $cleanFEmail = ($fEmail && !str_starts_with($fEmail, 'unknown@') && $fEmail !== 'unknown@domain.com') ? $fEmail : '';
+
             return [
                 'id' => $item->id,
                 'thread_count' => $thread['count'],
                 'folder' => $item->folder,
-                'from_name' => $this->formatSenderDisplayName($item->from_name, $item->from_email),
-                'from_email' => $item->from_email,
+                'from_name' => $this->formatSenderDisplayName($item->from_name, $cleanFEmail),
+                'from_email' => $cleanFEmail,
                 'to' => $item->to,
                 'subject' => $this->decodeMimeHeader($item->subject),
                 'snippet' => $this->getCleanSnippet($item->body_snippet ?? '', 85),
@@ -1782,11 +1866,17 @@ new class extends Component
         if ($this->viewMode === 'detail' && $this->selectedEmailId && $user) {
             $rawSelected = MailboxEmail::where('virtual_user_id', $user->id)->find($this->selectedEmailId);
             if ($rawSelected) {
+                $selFromEmail = $rawSelected->from_email;
+                if ($rawSelected->folder === 'sent' && (empty($selFromEmail) || str_starts_with($selFromEmail, 'unknown@'))) {
+                    $selFromEmail = $user?->email ?: $selFromEmail;
+                }
+                $cleanSelFromEmail = ($selFromEmail && !str_starts_with($selFromEmail, 'unknown@') && $selFromEmail !== 'unknown@domain.com') ? $selFromEmail : '';
+
                 $selectedEmail = [
                     'id' => $rawSelected->id,
                     'folder' => $rawSelected->folder,
-                    'from_name' => $this->formatSenderDisplayName($rawSelected->from_name, $rawSelected->from_email),
-                    'from_email' => $rawSelected->from_email,
+                    'from_name' => $this->formatSenderDisplayName($rawSelected->from_name, $cleanSelFromEmail),
+                    'from_email' => $cleanSelFromEmail,
                     'to' => $rawSelected->to,
                     'subject' => $this->decodeMimeHeader($rawSelected->subject),
                     'date' => $rawSelected->date_human ?: ($rawSelected->created_at ? $rawSelected->created_at->format('d M, H:i') : '-'),
@@ -1820,12 +1910,18 @@ new class extends Component
                         ->get();
 
                     foreach ($threadList as $tItem) {
+                        $tFromEmail = $tItem->from_email;
+                        if ($tItem->folder === 'sent' && (empty($tFromEmail) || str_starts_with($tFromEmail, 'unknown@'))) {
+                            $tFromEmail = $user?->email ?: $tFromEmail;
+                        }
+                        $cleanTFromEmail = ($tFromEmail && !str_starts_with($tFromEmail, 'unknown@') && $tFromEmail !== 'unknown@domain.com') ? $tFromEmail : '';
+
                         $threadEmails[] = [
                             'id' => $tItem->id,
                             'is_current' => ($tItem->id === $rawSelected->id),
                             'folder' => $tItem->folder,
-                            'from_name' => $this->formatSenderDisplayName($tItem->from_name, $tItem->from_email),
-                            'from_email' => $tItem->from_email,
+                            'from_name' => $this->formatSenderDisplayName($tItem->from_name, $cleanTFromEmail),
+                            'from_email' => $cleanTFromEmail,
                             'to' => $tItem->to,
                             'subject' => $this->decodeMimeHeader($tItem->subject),
                             'date' => $tItem->date_human ?: ($tItem->created_at ? $tItem->created_at->format('d M, H:i') : '-'),
@@ -2667,7 +2763,9 @@ new class extends Component
                             <div class="text-sm">
                                 <span class="font-bold text-white">From</span>
                                 <span class="font-bold text-slate-200 ml-1">{{ $selectedEmail['from_name'] }}</span>
-                                <span class="text-xs text-slate-400 font-mono ml-1">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                @if(!empty($selectedEmail['from_email']))
+                                    <span class="text-xs text-slate-400 font-mono ml-1">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                @endif
                             </div>
                             
                             <!-- To Me Dropdown -->
@@ -2686,7 +2784,7 @@ new class extends Component
 
                             <!-- Dropdown details -->
                             <div x-show="showHeaderDetails" x-collapse class="mt-2 p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 space-y-1" style="display: none;">
-                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] }} &lt;{{ $selectedEmail['from_email'] }}&gt;</span></div>
+                                <div><span class="text-slate-500">From:</span> <span class="text-slate-200">{{ $selectedEmail['from_name'] }}@if(!empty($selectedEmail['from_email'])) &lt;{{ $selectedEmail['from_email'] }}&gt;@endif</span></div>
                                 <div><span class="text-slate-500">To:</span> <span class="text-slate-200">{{ $selectedEmail['to'] }}</span></div>
                                 <div><span class="text-slate-500">Date:</span> <span class="text-slate-200">{{ $selectedEmail['date'] }}</span></div>
                                 <div><span class="text-slate-500">Security:</span> <span class="text-emerald-400">Standard TLS Encryption (Postfix/Dovecot)</span></div>
@@ -2858,9 +2956,11 @@ new class extends Component
                                             <span class="font-bold text-white group-hover:text-cyan-400 transition-colors">
                                                 {{ $tMsg['from_name'] }}
                                             </span>
-                                            <span class="text-[11px] text-slate-500 font-mono">
-                                                &lt;{{ $tMsg['from_email'] }}&gt;
-                                            </span>
+                                            @if(!empty($tMsg['from_email']))
+                                                <span class="text-[11px] text-slate-500 font-mono">
+                                                    &lt;{{ $tMsg['from_email'] }}&gt;
+                                                </span>
+                                            @endif
                                             @if($tMsg['folder'] === 'sent')
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Balasan Anda</span>
                                             @else
@@ -2971,7 +3071,9 @@ new class extends Component
                             <div class="flex items-center gap-2 text-xs">
                                 <i data-lucide="reply" class="w-4 h-4 text-slate-400"></i>
                                 <span class="font-bold text-white">{{ $selectedEmail['from_name'] }}</span>
-                                <span class="text-[11px] text-slate-400 font-mono hidden sm:inline">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                @if(!empty($selectedEmail['from_email']))
+                                    <span class="text-[11px] text-slate-400 font-mono hidden sm:inline">&lt;{{ $selectedEmail['from_email'] }}&gt;</span>
+                                @endif
                             </div>
                             <div class="flex items-center gap-1.5">
                                 <button type="button" 

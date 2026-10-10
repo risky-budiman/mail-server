@@ -71,8 +71,34 @@ class ReceiveInboundMail extends Command
                 $fromName = $this->decodeMimeString(trim(trim($m[1]), '"\''));
                 $fromEmail = strtolower(trim($m[2]));
             } else {
-                $fromEmail = strtolower(trim($fromRaw));
+                $fromEmail = strtolower(trim($fromRaw, " \t\n\r\0\x0B\"'<>"));
                 $fromName = $fromEmail;
+            }
+        } elseif (!empty($headers['sender'])) {
+            $rawSender = $headers['sender'];
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawSender, $m)) {
+                $fromName = $this->decodeMimeString(trim(trim($m[1]), '"\''));
+                $fromEmail = strtolower(trim($m[2]));
+            } else {
+                $fromEmail = strtolower(trim($rawSender, " \t\n\r\0\x0B\"'<>"));
+            }
+        } elseif (!empty($headers['reply-to'])) {
+            $rawReply = $headers['reply-to'];
+            if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawReply, $m)) {
+                $fromEmail = strtolower(trim($m[2]));
+            } else {
+                $fromEmail = strtolower(trim($rawReply, " \t\n\r\0\x0B\"'<>"));
+            }
+        } elseif (!empty($headers['return-path'])) {
+            $fromEmail = strtolower(trim($headers['return-path'], " \t\n\r\0\x0B\"'<>"));
+        }
+
+        if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
+            if (!empty($fromEmail) && !str_starts_with($fromEmail, 'unknown@')) {
+                $prefix = explode('@', $fromEmail)[0];
+                $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
+            } else {
+                $fromName = 'Pengirim';
             }
         }
 
@@ -126,8 +152,8 @@ class ReceiveInboundMail extends Command
             MailboxEmail::create([
                 'virtual_user_id' => $user->id,
                 'folder' => 'inbox',
-                'from_name' => $fromName ?: 'Sender',
-                'from_email' => $fromEmail ?: 'unknown@domain.com',
+                'from_name' => $fromName ?: 'Pengirim',
+                'from_email' => $fromEmail ?: '',
                 'to' => $toEmail ?: $user->email,
                 'subject' => $subject,
                 'date_human' => $dateHuman,
@@ -138,7 +164,7 @@ class ReceiveInboundMail extends Command
             ]);
 
             // Otomatis simpan kontak yang pernah berkomunikasi
-            if ($fromEmail && $fromEmail !== 'unknown@domain.com') {
+            if ($fromEmail && !str_starts_with($fromEmail, 'unknown@')) {
                 MailboxContact::recordCommunication($user->id, $fromEmail, $fromName);
             }
 

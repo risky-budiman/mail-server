@@ -286,35 +286,81 @@ new class extends Component
                             $size = strlen($rawContent);
                             $this->stats['bytes'] += $size;
 
-                            $fromEmail = 'unknown@domain.com';
+                            $fromEmail = '';
                             $fromName = '';
                             try {
                                 $fromList = $msg->getFrom();
-                                if (!empty($fromList) && isset($fromList[0])) {
-                                    $fromName = $this->decodeMimeHeader($fromList[0]->personal ?? '');
-                                    $fromEmail = $fromList[0]->mail ?? '';
+                                $firstFrom = null;
+                                if ($fromList instanceof \Illuminate\Support\Collection) {
+                                    $firstFrom = $fromList->first();
+                                } elseif (is_array($fromList) && !empty($fromList)) {
+                                    $firstFrom = reset($fromList);
                                 }
+                                if ($firstFrom) {
+                                    $fromName = $this->decodeMimeHeader($firstFrom->personal ?? '');
+                                    $fromEmail = $firstFrom->mail ?? '';
+                                }
+
                                 if (empty($fromEmail)) {
                                     $senderList = $msg->getSender();
-                                    if (!empty($senderList) && isset($senderList[0])) {
-                                        $fromName = $fromName ?: $this->decodeMimeHeader($senderList[0]->personal ?? '');
-                                        $fromEmail = $senderList[0]->mail ?? '';
+                                    $firstSender = ($senderList instanceof \Illuminate\Support\Collection) ? $senderList->first() : (is_array($senderList) ? reset($senderList) : null);
+                                    if ($firstSender) {
+                                        $fromName = $fromName ?: $this->decodeMimeHeader($firstSender->personal ?? '');
+                                        $fromEmail = $firstSender->mail ?? '';
                                     }
                                 }
+
                                 if (empty($fromEmail)) {
                                     $replyList = $msg->getReplyTo();
-                                    if (!empty($replyList) && isset($replyList[0])) {
-                                        $fromName = $fromName ?: $this->decodeMimeHeader($replyList[0]->personal ?? '');
-                                        $fromEmail = $replyList[0]->mail ?? '';
+                                    $firstReply = ($replyList instanceof \Illuminate\Support\Collection) ? $replyList->first() : (is_array($replyList) ? reset($replyList) : null);
+                                    if ($firstReply) {
+                                        $fromName = $fromName ?: $this->decodeMimeHeader($firstReply->personal ?? '');
+                                        $fromEmail = $firstReply->mail ?? '';
                                     }
                                 }
                             } catch (\Throwable $e) {}
 
-                            if (empty($fromEmail)) {
-                                $fromEmail = 'unknown@domain.com';
+                            // Ekstrak langsung dari rawContent RFC822 jika Webklex belum mendapatkan email pengirim
+                            if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
+                                if (preg_match('/^From:\s*(.+)$/mi', $rawContent, $m)) {
+                                    $rawFrom = trim($m[1]);
+                                    if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawFrom, $fm)) {
+                                        $nameClean = trim(trim($fm[1]), '"\' ');
+                                        $fromName = $fromName ?: ($nameClean ? $this->decodeMimeHeader($nameClean) : '');
+                                        $fromEmail = strtolower(trim($fm[2]));
+                                    } else {
+                                        $fromEmail = strtolower(trim($rawFrom, " \t\n\r\0\x0B\"'<>"));
+                                    }
+                                }
                             }
+
+                            if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
+                                if (preg_match('/^Sender:\s*(.+)$/mi', $rawContent, $m)) {
+                                    $rawSender = trim($m[1]);
+                                    if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawSender, $fm)) {
+                                        $nameClean = trim(trim($fm[1]), '"\' ');
+                                        $fromName = $fromName ?: ($nameClean ? $this->decodeMimeHeader($nameClean) : '');
+                                        $fromEmail = strtolower(trim($fm[2]));
+                                    } else {
+                                        $fromEmail = strtolower(trim($rawSender, " \t\n\r\0\x0B\"'<>"));
+                                    }
+                                }
+                            }
+
+                            if (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@')) {
+                                if (preg_match('/^Return-Path:\s*<?([^>\r\n]+)>?/mi', $rawContent, $m)) {
+                                    $fromEmail = strtolower(trim($m[1]));
+                                }
+                            }
+
+                            // Khusus folder Terkirim (Sent): Pengirim adalah pemilik mailbox itu sendiri!
+                            if ($targetDbFolder === 'sent' && (empty($fromEmail) || $fromEmail === 'unknown@domain.com' || str_starts_with($fromEmail, 'unknown@'))) {
+                                $fromEmail = $targetUser->email;
+                                $fromName = $targetUser->name ?: ucwords(explode('@', $targetUser->email)[0]);
+                            }
+
                             if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
-                                if ($fromEmail !== 'unknown@domain.com') {
+                                if (!empty($fromEmail) && !str_starts_with($fromEmail, 'unknown@')) {
                                     $prefix = explode('@', $fromEmail)[0];
                                     $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
                                 } else {
@@ -549,7 +595,7 @@ new class extends Component
         }
 
         $fromName = '';
-        $fromEmail = 'unknown@' . $targetUser->domain->name;
+        $fromEmail = '';
         if (preg_match('/^From:\s*(.+)$/mi', $rawContent, $m)) {
             $rawFrom = trim($m[1]);
             if (preg_match('/^(.*?)\s*<([^>]+)>/', $rawFrom, $fm)) {
@@ -557,7 +603,7 @@ new class extends Component
                 $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
                 $fromEmail = strtolower(trim($fm[2]));
             } else {
-                $fromEmail = strtolower(trim($rawFrom));
+                $fromEmail = strtolower(trim($rawFrom, " \t\n\r\0\x0B\"'<>"));
             }
         } elseif (preg_match('/^Sender:\s*(.+)$/mi', $rawContent, $m)) {
             $rawSender = trim($m[1]);
@@ -566,7 +612,7 @@ new class extends Component
                 $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
                 $fromEmail = strtolower(trim($fm[2]));
             } else {
-                $fromEmail = strtolower(trim($rawSender));
+                $fromEmail = strtolower(trim($rawSender, " \t\n\r\0\x0B\"'<>"));
             }
         } elseif (preg_match('/^Reply-To:\s*(.+)$/mi', $rawContent, $m)) {
             $rawReply = trim($m[1]);
@@ -575,12 +621,19 @@ new class extends Component
                 $fromName = $nameClean ? $this->decodeMimeHeader($nameClean) : '';
                 $fromEmail = strtolower(trim($fm[2]));
             } else {
-                $fromEmail = strtolower(trim($rawReply));
+                $fromEmail = strtolower(trim($rawReply, " \t\n\r\0\x0B\"'<>"));
             }
+        } elseif (preg_match('/^Return-Path:\s*<?([^>\r\n]+)>?/mi', $rawContent, $m)) {
+            $fromEmail = strtolower(trim($m[1]));
+        }
+
+        if ($fallbackFolder === 'sent' && (empty($fromEmail) || str_starts_with($fromEmail, 'unknown@'))) {
+            $fromEmail = $targetUser->email;
+            $fromName = $targetUser->name ?: ucwords(explode('@', $targetUser->email)[0]);
         }
 
         if (empty($fromName) || in_array(strtolower(trim($fromName)), ['sender', 'pengirim', 'unknown', 'from sender', 'form sender'])) {
-            if (!empty($fromEmail) && $fromEmail !== 'unknown@' . $targetUser->domain->name) {
+            if (!empty($fromEmail) && !str_starts_with($fromEmail, 'unknown@')) {
                 $prefix = explode('@', $fromEmail)[0];
                 $fromName = ucwords(str_replace(['.', '_', '-'], ' ', $prefix));
             } else {
