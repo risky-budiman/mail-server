@@ -4,12 +4,11 @@
 # Menghilangkan pesan "The attachments failed to upload" secara permanen
 # ==============================================================================
 
-set -e
-
 if [ "$EUID" -ne 0 ]; then
     echo "ERROR: Harap jalankan script ini sebagai root (contoh: sudo bash scripts/fix-vps-uploads.sh)"
     exit 1
 fi
+
 
 echo "=================================================================="
 echo " 1. Menyesuaikan Konfigurasi PHP-FPM & CLI (upload_max_filesize 100M)"
@@ -94,15 +93,24 @@ if [ -d "$APP_DIR" ]; then
 fi
 
 echo "=================================================================="
-echo " 4. Merestart Layanan Nginx & Seluruh Versi PHP-FPM"
+echo " 4. Merestart Layanan Nginx & Seluruh Versi PHP-FPM Aktif"
 echo "=================================================================="
 
 # Uji konfigurasi Nginx
-nginx -t
+nginx -t || true
 
-# Restart PHP-FPM & Nginx
-systemctl restart php*-fpm 2>/dev/null || true
-systemctl restart nginx
+# Restart PHP-FPM secara eksplisit per versi (php8.3-fpm, php8.2-fpm, dst)
+for VER in /etc/php/*; do
+    if [ -d "$VER" ]; then
+        PHP_VER=$(basename "$VER")
+        echo "--> Merestart php${PHP_VER}-fpm..."
+        systemctl restart "php${PHP_VER}-fpm" 2>/dev/null || service "php${PHP_VER}-fpm" restart 2>/dev/null || true
+    fi
+done
+
+# Restart Nginx
+echo "--> Merestart Nginx..."
+systemctl restart nginx 2>/dev/null || service nginx restart 2>/dev/null || true
 
 echo "=================================================================="
 echo " 5. Membersihkan Cache & Optimasi Laravel"
@@ -114,6 +122,7 @@ if [ -d "$APP_DIR" ]; then
     php artisan storage:link 2>/dev/null || true
     php artisan optimize
 fi
+
 
 echo "=================================================================="
 echo " 6. Verifikasi Diagnostik Akhir"

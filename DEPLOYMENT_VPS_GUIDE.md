@@ -517,30 +517,18 @@ Di Postfix, tabel `virtual_alias_maps` dievaluasi **sebelum** `virtual_mailbox_m
 #### B. Pengaturan Lampiran File Dokumen (Attachments) & Solusi "The attachments failed to upload"
 MailIDS mendukung pratinjau interaktif dan unduhan riil untuk berbagai dokumen (PDF, Office DOCX/XLSX/PPTX, Zip, RAR, Gambar, teks tanpa terkecuali hingga 100 MB).
 
-Jika muncul error **"The attachments failed to upload"**, penyebab utamanya adalah batas bawaan PHP-FPM Ubuntu (`upload_max_filesize` bawaan hanya 2 MB) atau direktori sementara Livewire (`livewire-tmp`) belum memiliki izin tulis untuk `www-data`. Jalankan perintah perbaikan cepat berikut di terminal VPS:
+Jika muncul error **"The attachments failed to upload"**, penyebab utamanya adalah batas bawaan PHP-FPM Ubuntu (`upload_max_filesize` bawaan hanya 2 MB), body size Nginx bawaan hanya 1 MB, atau direktori sementara Livewire (`livewire-tmp`) belum memiliki izin tulis untuk `www-data`. 
+
+Telah disediakan skrip otomatisasi terpadu untuk menyelesaikan ini dalam 1 perintah:
 
 ```bash
-# 1. Buat direktori penyimpanan upload Livewire & attachments serta berikan hak akses www-data
-sudo mkdir -p /var/www/mailids/storage/app/private/livewire-tmp
-sudo mkdir -p /var/www/mailids/storage/app/livewire-tmp
-sudo mkdir -p /var/www/mailids/storage/app/public/attachments
-sudo chown -R www-data:www-data /var/www/mailids/storage /var/www/mailids/bootstrap/cache
-sudo chmod -R 775 /var/www/mailids/storage /var/www/mailids/bootstrap/cache
-
-# 2. Naikkan batas upload di PHP-FPM (upload_max_filesize & post_max_size ke 100M)
-sudo sed -i 's/^upload_max_filesize\s*=.*/upload_max_filesize = 100M/' /etc/php/8.3/fpm/php.ini
-sudo sed -i 's/^post_max_size\s*=.*/post_max_size = 100M/' /etc/php/8.3/fpm/php.ini
-sudo sed -i 's/^memory_limit\s*=.*/memory_limit = 256M/' /etc/php/8.3/fpm/php.ini
-
-# 3. Pastikan batas body size di Nginx diset ke 100M
-# (Pastikan "client_max_body_size 100M;" ada di /etc/nginx/sites-available/mailids.conf)
-
-# 4. Bersihkan cache aplikasi & restart PHP-FPM dan Nginx
 cd /var/www/mailids
-php artisan optimize:clear
-php artisan storage:link
-sudo systemctl restart php8.3-fpm nginx
+git pull origin main
+sudo bash scripts/fix-vps-uploads.sh
 ```
+
+Skrip ini otomatis menaikkan batas upload seluruh versi PHP-FPM & Nginx ke 100M, mengatur perizinan storage www-data, merestart daemon PHP-FPM/Nginx, dan me-refresh cache optimasi Laravel.
+
 
 ---
 *Dokumentasi ini 100% mutakhir dan selaras dengan seluruh modul MailIDS yang aktif.*

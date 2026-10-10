@@ -242,6 +242,14 @@ echo " Selesai! Mengaktifkan & Menjalankan Semua Layanan:"
 echo "======================================================"
 systemctl restart postfix dovecot opendkim
 systemctl enable postfix dovecot opendkim
-systemctl restart php*-fpm 2>/dev/null || true
+
+for VER in /etc/php/*; do
+    if [ -d "$VER" ]; then
+        PHP_VER=$(basename "$VER")
+        systemctl restart "php${PHP_VER}-fpm" 2>/dev/null || service "php${PHP_VER}-fpm" restart 2>/dev/null || true
+    fi
+done
+systemctl restart nginx 2>/dev/null || true
 echo " Mail Engine & Webmail Storage Telah Siap Digunakan!"
+
 
