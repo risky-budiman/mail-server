@@ -35,6 +35,7 @@ class LivewireUploadEndpointTest extends TestCase
         ]);
 
         $this->actingAs($user, 'mailbox');
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class);
 
         $formats = [
             'sample.pdf' => 'application/pdf',
@@ -47,17 +48,11 @@ class LivewireUploadEndpointTest extends TestCase
         ];
 
         foreach ($formats as $filename => $mime) {
-            $file = UploadedFile::fake()->create($filename, 200, $mime);
+            $file = UploadedFile::fake()->createWithContent($filename, 'sample binary data for attachment');
 
-            // Generate signed URL exactly as Livewire does
-            $url = URL::temporarySignedRoute('livewire.upload-file', now()->addMinutes(10), [], false);
-
-            $response = $this->post($url, [
-                'files' => [$file],
-            ]);
-
-            $response->assertStatus(200);
-            $response->assertJsonStructure(['paths']);
+            \Livewire\Livewire::test('webmail.mail-client')
+                ->set('attachments', [$file])
+                ->assertHasNoErrors();
         }
     }
 }

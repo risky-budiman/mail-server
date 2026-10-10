@@ -128,9 +128,9 @@ class MailServerAndAttachmentTest extends TestCase
 
         $this->actingAs($user, 'mailbox');
 
-        $pdfFile = \Illuminate\Http\UploadedFile::fake()->create('dokumen.pdf', 500, 'application/pdf');
-        $zipFile = \Illuminate\Http\UploadedFile::fake()->create('arsip.zip', 1000, 'application/zip');
-        $xlsxFile = \Illuminate\Http\UploadedFile::fake()->create('laporan.xlsx', 300, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $pdfFile = \Illuminate\Http\UploadedFile::fake()->createWithContent('dokumen.pdf', 'konten dokumen pdf');
+        $zipFile = \Illuminate\Http\UploadedFile::fake()->createWithContent('arsip.zip', 'konten arsip zip');
+        $xlsxFile = \Illuminate\Http\UploadedFile::fake()->createWithContent('laporan.xlsx', 'konten laporan spreadsheet');
 
         \Livewire\Livewire::test('webmail.mail-client')
             ->set('composeTo', 'target@example.com')

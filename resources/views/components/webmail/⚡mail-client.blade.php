@@ -1540,28 +1540,37 @@ new class extends Component
 };
 ?>
 
-<div class="h-full min-h-0 flex-1 flex flex-col rounded-2xl bg-slate-900/90 border border-slate-800/90 overflow-hidden shadow-2xl backdrop-blur-xl"
+<div class="w-full h-full min-h-0 flex-1 flex flex-col bg-slate-950 overflow-hidden relative select-none"
      x-data="{ showFolderSidebar: false, mobileEmailOpen: false }">
     
-    <!-- Top Action Toolbar -->
-    <div class="min-h-14 px-4 py-2.5 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <!-- Top Modern Unified Header (Edge-to-Edge) -->
+    <header class="h-14 sm:h-15 px-3 sm:px-5 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between gap-3 shrink-0 z-30">
+        <!-- Left: Hamburger Toggle (Mobile) + Brand Logo + Active Folder Badge -->
         <div class="flex items-center gap-2 sm:gap-3">
             <!-- Mobile Toggle Folder Button -->
-            <button @click="showFolderSidebar = !showFolderSidebar" class="md:hidden p-2 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700/60" title="Pilih Folder">
-                <i data-lucide="folder" class="w-4 h-4"></i>
+            <button @click="showFolderSidebar = !showFolderSidebar" 
+                    class="md:hidden p-2 rounded-xl text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-colors" 
+                    title="Menu Folder">
+                <i data-lucide="menu" class="w-5 h-5"></i>
             </button>
 
-            <!-- Tulis Pesan Button with Gradient Glow -->
-            <button wire:click="$set('showComposeModal', true)" 
-                    class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]">
-                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                <span>Tulis Pesan</span>
-            </button>
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/20 ring-1 ring-white/20 shrink-0">
+                    <i data-lucide="mail" class="w-4 h-4 text-white"></i>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="font-extrabold text-white text-base tracking-tight flex items-center gap-0.5">
+                        Mail<span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">IDS</span>
+                    </span>
+                    <span class="hidden sm:inline-flex text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        Webmail
+                    </span>
+                </div>
+            </div>
 
-            <div class="hidden sm:block h-5 w-px bg-slate-800"></div>
-
-            <!-- Active Folder Indicator Badge -->
-            <div class="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 font-medium">
+            <!-- Active Folder Badge (Desktop / Tablet) -->
+            <div class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 font-medium ml-1">
                 <i data-lucide="{{ $activeFolder === 'inbox' ? 'inbox' : ($activeFolder === 'sent' ? 'send' : ($activeFolder === 'drafts' ? 'file-text' : ($activeFolder === 'spam' ? 'alert-octagon' : ($activeFolder === 'trash' ? 'trash-2' : 'folder')))) }}" class="w-3.5 h-3.5 text-cyan-400"></i>
                 <span class="text-slate-400">Folder:</span>
                 <span class="font-bold text-white capitalize">
@@ -1570,55 +1579,109 @@ new class extends Component
             </div>
         </div>
 
+        <!-- Center Notification (Flash message) -->
         @if (session()->has('webmail_msg'))
-            <div class="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 shadow-sm animate-pulse">
-                <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
-                <span>{{ session('webmail_msg') }}</span>
+            <div class="hidden md:flex items-center gap-2 px-3.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs shadow-sm animate-pulse">
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span class="truncate max-w-xs">{{ session('webmail_msg') }}</span>
             </div>
         @endif
 
-        <div class="flex items-center gap-2.5">
-            <!-- Tombol Refresh Utama yang Konsisten dan Terpusat -->
+        <!-- Right: Action Tools & User Profile -->
+        <div class="flex items-center gap-2 sm:gap-2.5">
+            <!-- Segarkan Inbox Button -->
             <button type="button" 
                     wire:click="refreshInbox" 
-                    class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/70 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-                    title="Segarkan Kotak Masuk (Tarik Email Baru dari Dovecot)">
-                <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
+                    class="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/70 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                    title="Segarkan Kotak Masuk (Tarik Email Baru)">
+                <i data-lucide="rotate-cw" class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
                 <span class="hidden sm:inline">Segarkan</span>
             </button>
 
-            <!-- Tombol Pengaturan Akun (Settings: Ganti Nama, Password) -->
+            <!-- Pengaturan Akun Button -->
             <button type="button" 
                     wire:click="openSettingsModal" 
-                    class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-300 border border-slate-700/70 hover:border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                    class="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-300 border border-slate-700/70 hover:border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
                     title="Pengaturan Akun Pengguna">
-                <i data-lucide="settings" class="w-3.5 h-3.5 text-indigo-400"></i>
+                <i data-lucide="settings" class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-indigo-400"></i>
                 <span class="hidden sm:inline">Pengaturan</span>
             </button>
 
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 shadow-inner">
+            <!-- Dovecot IMAP Active Badge (Large screens) -->
+            <div class="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 text-[11px] text-slate-400 shadow-inner">
                 <span class="relative flex h-2 w-2">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span class="font-medium text-slate-300">Dovecot IMAP Active</span>
+                <span class="font-medium text-slate-300">Dovecot IMAP</span>
             </div>
-        </div>
-    </div>
 
-    <!-- 3-Column Webmail Layout -->
-    <div class="flex-1 flex overflow-hidden relative">
-        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, w-60 on Desktop) -->
+            <div class="h-5 w-px bg-slate-800 hidden sm:block"></div>
+
+            <!-- User Mailbox Account Pill -->
+            <div class="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center gap-2 shadow-inner">
+                <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-xs shrink-0">
+                    {{ strtoupper(substr($currentAccount->email ?? (auth('mailbox')->user()->email ?? 'U'), 0, 1)) }}
+                </div>
+                <div class="hidden lg:flex flex-col text-left max-w-[180px]">
+                    <span class="text-[11px] font-semibold text-slate-200 font-mono leading-none truncate">
+                        {{ $currentAccount->email ?? (auth('mailbox')->user()->email ?? 'user@domain.com') }}
+                    </span>
+                    <span class="text-[9px] text-emerald-400 font-medium flex items-center gap-1 leading-tight mt-0.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> IMAP/SMTP
+                    </span>
+                </div>
+            </div>
+
+            <!-- Logout Button -->
+            <form method="POST" action="{{ route('webmail.logout') }}" class="inline">
+                @csrf
+                <button type="submit" 
+                        class="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/15 text-slate-300 hover:text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-700/80 hover:border-rose-500/30 shadow-sm" 
+                        title="Keluar dari Webmail">
+                    <i data-lucide="log-out" class="w-4 h-4 sm:w-3.5 sm:h-3.5"></i>
+                    <span class="hidden md:inline">Keluar</span>
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <!-- Edge-to-Edge Webmail Work Area -->
+    <div class="flex-1 min-h-0 flex overflow-hidden relative w-full h-full">
+        <!-- Mobile Backdrop for Folder Drawer -->
+        <div x-show="showFolderSidebar" 
+             @click="showFolderSidebar = false" 
+             x-transition:enter="transition-opacity ease-linear duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-linear duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-xs" 
+             style="display: none;"></div>
+
+        <!-- Kolom 1: Folder Navigasi (Collapsible Drawer on Mobile, w-64 on Desktop) -->
         <div :class="showFolderSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
-             class="absolute md:static inset-y-0 left-0 w-60 bg-slate-950/95 md:bg-slate-950/70 backdrop-blur-xl border-r border-slate-800/80 p-3 flex flex-col justify-between shrink-0 z-20 transition-transform duration-200 ease-in-out h-full overflow-hidden">
-            <!-- Scrollable Folder List Area -->
-            <div class="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1 pb-2">
+             class="fixed md:static inset-y-0 left-0 w-64 md:w-60 lg:w-64 bg-slate-950 md:bg-slate-950/90 border-r border-slate-800/80 p-3 flex flex-col justify-between shrink-0 z-40 md:z-20 transition-transform duration-200 ease-in-out h-full overflow-hidden shadow-2xl md:shadow-none">
+            
+            <!-- Tulis Pesan Button at top of Sidebar (Modern Standard like Gmail/Outlook) -->
+            <div class="shrink-0 mb-3">
                 <div class="flex items-center justify-between md:hidden pb-2 mb-2 border-b border-slate-800">
                     <span class="text-xs font-bold text-slate-300">Navigasi Folder</span>
                     <button @click="showFolderSidebar = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
+
+                <button wire:click="$set('showComposeModal', true)" @click="showFolderSidebar = false"
+                        class="w-full px-4 py-2.5 bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 hover:shadow-cyan-500/30 hover:scale-[1.01] active:scale-[0.99]">
+                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    <span>Tulis Pesan</span>
+                </button>
+            </div>
+
+            <!-- Scrollable Folder List Area -->
+            <div class="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1 pb-2">
 
                 <!-- Kotak Masuk (Inbox) -->
                 <button wire:click="selectFolder('inbox')" @click="showFolderSidebar = false"
@@ -1865,7 +1928,7 @@ new class extends Component
                         </div>
 
                         <!-- Sender / Recipient Name (Jika folder Terkirim, tampilkan To: Penerima) -->
-                        <div class="w-44 sm:w-56 shrink-0 truncate text-xs sm:text-sm flex items-center gap-2">
+                        <div class="w-28 sm:w-44 md:w-56 shrink-0 truncate text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
                             @if(!$email['is_read'])
                                 <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0 ring-4 ring-cyan-400/20" title="Belum Dibaca"></span>
                             @else
@@ -1941,7 +2004,7 @@ new class extends Component
                  wire:key="email-detail-view-{{ $selectedEmailId }}">
                 @if($selectedEmail)
                 <!-- Hostinger Action Bar (← Back, Mail, Spam, Trash, Move, Summarize AI) -->
-                <div class="px-6 py-3 border-b border-slate-800/80 bg-slate-900/60 flex items-center justify-between gap-3 shrink-0">
+                <div class="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-800/80 bg-slate-900/60 flex items-center justify-between gap-2 sm:gap-3 shrink-0">
                     <div class="flex items-center gap-2 sm:gap-3">
                         <!-- Tombol Kembali ← -->
                         <button wire:click="backToList" 
@@ -2025,7 +2088,7 @@ new class extends Component
                 </div>
 
                 <!-- Hostinger Email Content Scroll Area -->
-                <div class="flex-1 overflow-y-auto px-6 sm:px-10 py-6 space-y-6">
+                <div class="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-10 py-4 sm:py-6 space-y-6">
                     
                     <!-- Subject Title (Hostinger bold black/white title) -->
                     <div>
