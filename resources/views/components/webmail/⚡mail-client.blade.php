@@ -2255,6 +2255,12 @@ new class extends Component
                                     <span class="text-xs font-mono font-normal text-slate-400">({{ count($filteredEmails) }})</span>
                                 @endif
                             </h1>
+                            <button type="button" 
+                                    wire:click="refreshInbox" 
+                                    class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer" 
+                                    title="Segarkan Kotak Masuk (Tarik Email Baru)">
+                                <i data-lucide="rotate-cw" class="w-4 h-4 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
+                            </button>
                         </div>
 
                         <!-- Filter Chips: All mail, Unread, Read, Starred (Gaya Hostinger/Gmail) -->
@@ -2299,15 +2305,24 @@ new class extends Component
                     </div>
                 </div>
 
-                <!-- Action Bar: Select All Checkbox & Bulk Operations -->
+                <!-- Action Bar: Select All Checkbox, Refresh (Gaya Gmail) & Bulk Operations -->
                 <div class="px-4 sm:px-6 py-2 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between text-xs text-slate-400 shrink-0">
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-3">
                         <div class="flex items-center gap-2 cursor-pointer" wire:click="toggleSelectAll">
                             <input type="checkbox" 
                                    class="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-0 focus:ring-offset-0 bg-slate-900 cursor-pointer"
                                    {{ count($selectedIds) > 0 && count($selectedIds) >= count($filteredEmails) ? 'checked' : '' }}>
                             <span class="text-[11px] font-medium text-slate-300">Pilih Semua</span>
                         </div>
+
+                        <!-- Tombol Refresh / Segarkan Persis Seperti Gmail Tepat di Atas Kotak Masuk -->
+                        <button type="button" 
+                                wire:click="refreshInbox" 
+                                class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all flex items-center gap-1.5 cursor-pointer border border-transparent hover:border-slate-700/80" 
+                                title="Segarkan Kotak Masuk (Refresh)">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-cyan-400" wire:loading.class="animate-spin" wire:target="refreshInbox"></i>
+                            <span class="text-[11px] font-medium text-slate-300 hidden sm:inline">Segarkan</span>
+                        </button>
 
                         @if(count($selectedIds) > 0)
                         <div class="flex items-center gap-2 animate-fade-in pl-2 border-l border-slate-800">
