@@ -792,6 +792,18 @@ new class extends Component
         }
 
         $finalBody = !empty($htmlPart) ? $htmlPart : (!empty($textPart) ? $textPart : $body);
+
+        // Jika bukan multipart atau jika konten belum terdekode
+        if (empty($htmlPart) && empty($textPart)) {
+            if (stripos($headers, 'base64') !== false) {
+                $cleanBase = preg_replace('/\s+/', '', $finalBody);
+                $decoded = base64_decode($cleanBase);
+                if ($decoded !== false) $finalBody = $decoded;
+            } elseif (stripos($headers, 'quoted-printable') !== false) {
+                $finalBody = quoted_printable_decode($finalBody);
+            }
+        }
+
         $finalBody = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $finalBody);
 
         return [
@@ -1761,6 +1773,8 @@ new class extends Component
         if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $html)) {
             $html = quoted_printable_decode($html);
         }
+        // Bersihkan sisa QP soft-break yang terlanjur berubah menjadi '= ' di depan teks atau tag
+        $html = preg_replace('/=\s+(?=[a-zA-Z0-9<])/u', '', $html);
 
         // 2. Hapus komentar UID internal dan boundary yang bocor
         $html = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $html);
@@ -1787,8 +1801,9 @@ new class extends Component
         $html = preg_replace('/<\/?m:[a-z0-9_-]+[^>]*>/is', '', $html);
         $html = preg_replace('/<\/?v:[a-z0-9_-]+[^>]*>/is', '', $html);
 
-        // 5. Hapus script berbahaya, link eksternal yang merusak css, dan meta
+        // 5. Hapus script berbahaya, style tags (mencegah CSS bocor ke halaman utama), link eksternal, dan meta
         $html = preg_replace('#<script\b[^>]*>(.*?)<\/script>#is', '', $html);
+        $html = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', '', $html);
         $html = preg_replace('#<link\b[^>]*>#is', '', $html);
         $html = preg_replace('#<meta\b[^>]*>#is', '', $html);
 
@@ -1836,6 +1851,8 @@ new class extends Component
         if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $clean)) {
             $clean = quoted_printable_decode($clean);
         }
+        // Bersihkan sisa QP soft-break yang terlanjur berubah menjadi '= ' di depan kata
+        $clean = preg_replace('/=\s+(?=[a-zA-Z0-9])/u', '', $clean);
 
         // 2.5 Hapus duplikasi blok disclaimer atau paragraf identik berurutan
         $clean = preg_replace('/(\b[^\r\n]{40,}\b)(?:\s*[\r\n]+\s*\1)+/is', '$1', $clean);
@@ -1926,21 +1943,38 @@ new class extends Component
     {
         if (empty($rawBody)) return '';
 
-        // Hapus style, script, dan tag meta
-        $text = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', ' ', $rawBody);
-        $text = preg_replace('#<script\b[^>]*>(.*?)<\/script>#is', ' ', $text);
-        $text = preg_replace('#<!--(.*?)-->#is', ' ', $text);
+        $clean = $rawBody;
 
-        // Hapus tag HTML
-        $text = strip_tags($text);
+        // 1. Decode quoted-printable jika terdeteksi
+        if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $clean)) {
+            $clean = quoted_printable_decode($clean);
+        }
 
-        // Ubah entitas HTML seperti &nbsp;, &amp;, dll menjadi karakter biasa
-        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // 2. Bersihkan blok <style>...</style> lengkap maupun terpotong (jika string terpotong)
+        $clean = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', ' ', $clean);
+        $clean = preg_replace('#<style\b[^>]*>.*$#is', ' ', $clean);
+        $clean = preg_replace('#<script\b[^>]*>(.*?)<\/script>#is', ' ', $clean);
+        $clean = preg_replace('#<script\b[^>]*>.*$#is', ' ', $clean);
+        $clean = preg_replace('#<!--(.*?)-->#is', ' ', $clean);
 
-        // Bersihkan whitespace berulang
-        $text = preg_replace('#\s+#u', ' ', $text);
+        // 3. Bersihkan pola CSS tersisa (misal :root { ... }, @font-face { ... }, .class { ... })
+        $clean = preg_replace('/:[a-z0-9_-]+\s*\{[^}]*\}/is', ' ', $clean);
+        $clean = preg_replace('/@[a-z0-9_-]+[^{]*\{[^}]*\}/is', ' ', $clean);
+        $clean = preg_replace('/(?:\.[a-z0-9_\-,\s*#]+)+\{[^}]*\}/is', ' ', $clean);
 
-        return \Illuminate\Support\Str::limit(trim($text), $limit);
+        // 4. Bersihkan sisa QP soft break seperti '= ' di antara teks
+        $clean = preg_replace('/=\s+(?=[a-z0-9])/i', '', $clean);
+
+        // 5. Hapus tag HTML
+        $clean = strip_tags($clean);
+
+        // 6. Ubah entitas HTML seperti &nbsp;, &amp;, dll menjadi karakter biasa
+        $clean = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // 7. Bersihkan whitespace berulang
+        $clean = preg_replace('#\s+#u', ' ', $clean);
+
+        return \Illuminate\Support\Str::limit(trim($clean), $limit);
     }
 
     public function render()
@@ -1969,7 +2003,7 @@ new class extends Component
             ->when($this->activeFilter === 'read', function ($query) {
                 $query->where('is_read', true);
             })
-            ->selectRaw("id, folder, from_name, from_email, `to`, subject, SUBSTR(body, 1, 300) as body_snippet, date_human, is_read, is_starred, attachments, spam_reason, spam_score, created_at")
+            ->selectRaw("id, folder, from_name, from_email, `to`, subject, SUBSTR(body, 1, 4000) as body_snippet, date_human, is_read, is_starred, attachments, spam_reason, spam_score, created_at")
             ->orderBy('id', 'desc')
             ->take(60)
             ->get();
@@ -3207,9 +3241,43 @@ new class extends Component
                         <div :class="readingMode === 'paper' ? 'email-paper-canvas' : 'email-dark-canvas'" 
                              class="transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
                             @if ($isRichHtml)
-                                {{-- Email Berformat Rich HTML Bersih --}}
-                                <div class="email-rendered-content overflow-x-auto">
-                                    {!! $this->cleanEmailHtml($selectedEmail['body']) !!}
+                                {{-- Email HTML di-render dalam iframe sandbox agar CSS email tidak bocor ke halaman --}}
+                                @php
+                                    $cleanedHtml = $this->cleanEmailHtml($selectedEmail['body']);
+                                @endphp
+                                <div class="email-rendered-content overflow-x-auto"
+                                     wire:key="email-iframe-wrapper-{{ $selectedEmail['id'] }}"
+                                     x-data="{
+                                        renderEmailIframe(mode) {
+                                            const iframe = this.$refs.emailIframe;
+                                            if (!iframe) return;
+                                            const emailContent = {{ \Illuminate\Support\Js::from($cleanedHtml) }};
+                                            const dark = mode === 'dark';
+                                            const bg = dark ? '#0b132b' : '#ffffff';
+                                            const fg = dark ? '#e2e8f0' : '#1e293b';
+                                            const lk = dark ? '#38bdf8' : '#2563eb';
+                                            iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1><style>html,body{margin:0;padding:8px;background:'+bg+';color:'+fg+';font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:0.95rem;line-height:1.6;word-wrap:break-word;overflow-wrap:break-word}a{color:'+lk+';text-decoration:underline}img{max-width:100%!important;height:auto!important;display:inline-block}table{max-width:100%!important}pre,code{white-space:pre-wrap;word-wrap:break-word}</style></head><body>'+emailContent+'</body></html>';
+                                            const adjustHeight = () => {
+                                                try {
+                                                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                                                    if (doc && (doc.documentElement || doc.body)) {
+                                                        const h = Math.max(doc.documentElement?.scrollHeight || 0, doc.body?.scrollHeight || 0);
+                                                        if (h > 0) iframe.style.height = (h + 30) + 'px';
+                                                    }
+                                                } catch(e) {}
+                                            };
+                                            iframe.onload = () => {
+                                                adjustHeight();
+                                                setTimeout(adjustHeight, 350);
+                                                setTimeout(adjustHeight, 1200);
+                                            };
+                                        }
+                                     }"
+                                     x-init="renderEmailIframe(readingMode); $watch('readingMode', (val) => renderEmailIframe(val))">
+                                    <iframe x-ref="emailIframe"
+                                            sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                            style="width: 100%; min-height: 280px; border: none; display: block;"
+                                            title="Email Content"></iframe>
                                 </div>
                             @else
                                 {{-- Email Berformat Plain Text Rapi dengan Autolink & Quotes --}}
