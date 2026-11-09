@@ -1795,12 +1795,11 @@ new class extends Component
 
         $html = $rawHtml;
 
-        // 1. Decode quoted-printable jika terdeteksi (mis. =3D atau =20 atau =\r?\n)
-        if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $html)) {
-            $html = quoted_printable_decode($html);
+        // 1. Bersihkan sisa QP soft-break (=\r\n) dan =3D secara aman tanpa merusak width=device-width atau token URL
+        if (str_contains($html, '=3D') || str_contains($html, '=3d')) {
+            $html = str_ireplace('=3D', '=', $html);
         }
-        // Bersihkan sisa QP soft-break yang terlanjur berubah menjadi '= ' di depan teks atau tag
-        $html = preg_replace('/=\s+(?=[a-zA-Z0-9<])/u', '', $html);
+        $html = preg_replace('/=[ \t]*\r?\n/', '', $html);
 
         // 2. Hapus komentar UID internal dan boundary yang bocor
         $html = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $html);
@@ -1886,12 +1885,11 @@ new class extends Component
         $clean = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $clean);
         $clean = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $clean);
 
-        // 2. Decode quoted-printable jika terdeteksi
-        if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $clean)) {
-            $clean = quoted_printable_decode($clean);
+        // 2. Bersihkan sisa QP soft-break (=\r\n) dan =3D secara aman
+        if (str_contains($clean, '=3D') || str_contains($clean, '=3d')) {
+            $clean = str_ireplace('=3D', '=', $clean);
         }
-        // Bersihkan sisa QP soft-break yang terlanjur berubah menjadi '= ' di depan kata
-        $clean = preg_replace('/=\s+(?=[a-zA-Z0-9])/u', '', $clean);
+        $clean = preg_replace('/=[ \t]*\r?\n/', '', $clean);
 
         // 2.5 Hapus duplikasi blok disclaimer atau paragraf identik berurutan
         $clean = preg_replace('/(\b[^\r\n]{40,}\b)(?:\s*[\r\n]+\s*\1)+/is', '$1', $clean);
@@ -1984,10 +1982,11 @@ new class extends Component
 
         $clean = $rawBody;
 
-        // 1. Decode quoted-printable jika terdeteksi
-        if (preg_match('/=([A-F0-9]{2}|[ \t]*\r?\n)/i', $clean)) {
-            $clean = quoted_printable_decode($clean);
+        // 1. Bersihkan sisa QP soft break (=\r\n) dan =3D secara aman
+        if (str_contains($clean, '=3D') || str_contains($clean, '=3d')) {
+            $clean = str_ireplace('=3D', '=', $clean);
         }
+        $clean = preg_replace('/=[ \t]*\r?\n/', '', $clean);
 
         // 2. Bersihkan blok <style>...</style> lengkap maupun terpotong (jika string terpotong)
         $clean = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', ' ', $clean);
@@ -2011,7 +2010,8 @@ new class extends Component
         $clean = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
         // 7. Bersihkan whitespace berulang
-        $clean = preg_replace('#\s+#u', ' ', $clean);
+        $cleanSpaced = @preg_replace('#\s+#u', ' ', $clean);
+        $clean = ($cleanSpaced !== null) ? $cleanSpaced : preg_replace('#\s+#', ' ', $clean);
 
         return \Illuminate\Support\Str::limit(trim($clean), $limit);
     }
