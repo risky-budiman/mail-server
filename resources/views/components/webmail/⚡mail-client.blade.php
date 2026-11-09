@@ -3283,15 +3283,17 @@ new class extends Component
                                 <div class="email-rendered-content overflow-x-auto"
                                      wire:key="email-iframe-wrapper-{{ $selectedEmail['id'] }}"
                                      x-data="{
+                                        hasLoaded: false,
                                         renderEmailIframe(mode) {
                                             const iframe = this.$refs.emailIframe;
-                                            if (!iframe) return;
-                                            const emailContent = {{ \Illuminate\Support\Js::from($cleanedHtml) }};
+                                            const rawEl = this.$refs.emailRaw;
+                                            if (!iframe || !rawEl) return;
+                                            const emailContent = rawEl.value || '';
                                             const dark = mode === 'dark';
                                             const bg = dark ? '#0b132b' : '#ffffff';
                                             const fg = dark ? '#e2e8f0' : '#1e293b';
                                             const lk = dark ? '#38bdf8' : '#2563eb';
-                                            iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1><style>html,body{margin:0;padding:8px;background:'+bg+';color:'+fg+';font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:0.95rem;line-height:1.6;word-wrap:break-word;overflow-wrap:break-word}a{color:'+lk+';text-decoration:underline}img{max-width:100%!important;height:auto!important;display:inline-block}table{max-width:100%!important}pre,code{white-space:pre-wrap;word-wrap:break-word}</style></head><body>'+emailContent+'</body></html>';
+                                            iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1><style>html,body{margin:0;padding:12px;background:'+bg+';color:'+fg+';font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:0.95rem;line-height:1.6;word-wrap:break-word;overflow-wrap:break-word}a{color:'+lk+';text-decoration:underline}img{max-width:100%!important;height:auto!important;display:inline-block}table{max-width:100%!important}pre,code{white-space:pre-wrap;word-wrap:break-word}</style></head><body>'+emailContent+'</body></html>';
                                             const adjustHeight = () => {
                                                 try {
                                                     const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -3304,13 +3306,15 @@ new class extends Component
                                             iframe.onload = () => {
                                                 adjustHeight();
                                                 setTimeout(adjustHeight, 350);
-                                                setTimeout(adjustHeight, 1200);
+                                                setTimeout(adjustHeight, 1000);
                                             };
+                                            this.hasLoaded = true;
                                         }
                                      }"
-                                     x-init="renderEmailIframe(readingMode); $watch('readingMode', (val) => renderEmailIframe(val))">
+                                     x-init="$nextTick(() => renderEmailIframe(readingMode)); $watch('readingMode', (val) => renderEmailIframe(val))">
+                                    <textarea x-ref="emailRaw" class="hidden" style="display:none;">{!! htmlspecialchars($cleanedHtml, ENT_QUOTES, 'UTF-8') !!}</textarea>
                                     <iframe x-ref="emailIframe"
-                                            sandbox="allow-popups allow-popups-to-escape-sandbox"
+                                            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                                             style="width: 100%; min-height: 280px; border: none; display: block;"
                                             title="Email Content"></iframe>
                                 </div>
