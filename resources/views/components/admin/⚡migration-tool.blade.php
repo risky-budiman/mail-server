@@ -416,11 +416,17 @@ new class extends Component
                             try {
                                 if ($msg->hasHTMLBody()) {
                                     $body = (string) $msg->getHTMLBody();
-                                } else {
-                                    $textBody = (string) $msg->getTextBody();
-                                    $body = !empty($textBody) ? $textBody : $this->cleanRawBodyContent($fullRaw);
+                                }
+                                if (empty(trim($body))) {
+                                    $body = (string) $msg->getTextBody();
+                                }
+                                if (empty(trim($body))) {
+                                    $body = $this->cleanRawBodyContent($fullRaw);
                                 }
                             } catch (\Throwable $e) {
+                                $body = $this->cleanRawBodyContent($fullRaw);
+                            }
+                            if (empty(trim($body))) {
                                 $body = $this->cleanRawBodyContent($fullRaw);
                             }
 
@@ -477,7 +483,7 @@ new class extends Component
                                 $existingEmail->update([
                                     'from_name'   => ($fromName && $fromName !== 'Pengirim') ? $fromName : $existingEmail->from_name,
                                     'from_email'  => $fromEmail ?: $existingEmail->from_email,
-                                    'body'        => $body,
+                                    'body'        => !empty(trim($body)) ? $body : $existingEmail->body,
                                     'attachments' => !empty($attachmentsData) ? $attachmentsData : $existingEmail->attachments,
                                     'is_read'     => $isRead,
                                     'is_starred'  => $isStarred,
@@ -493,7 +499,7 @@ new class extends Component
                                     'date_human'      => $dateHuman,
                                     'is_read'         => $isRead,
                                     'is_starred'      => $isStarred,
-                                    'body'            => $body,
+                                    'body'            => !empty(trim($body)) ? $body : $this->cleanRawBodyContent($fullRaw),
                                     'attachments'     => $attachmentsData,
                                     'spam_score'      => 0.0,
                                 ]);

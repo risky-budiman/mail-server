@@ -500,7 +500,8 @@ new class extends Component
     }
 
     /**
-     * Sinkronisasi file email fisik dari Maildir Dovecot (/var/vmail/domain/user/new & cur)
+     * Sinkronisasi file email fisik dari Maildir Dovecot (/var/vmail/domain/user/...)
+     * Mendukung pemindaian multi-folder: Inbox, Sent, Drafts, Trash, Spam
      */
     protected function syncFromMaildir(VirtualUser $user): int
     {
@@ -517,69 +518,94 @@ new class extends Component
             return 0;
         }
 
-        $subdirs = ['new', 'cur'];
+        $folderMaps = [
+            ''               => 'inbox',
+            '.Sent'          => 'sent',
+            'Sent'           => 'sent',
+            '.Sent Messages' => 'sent',
+            '.Drafts'        => 'drafts',
+            'Drafts'         => 'drafts',
+            '.Trash'         => 'trash',
+            'Trash'          => 'trash',
+            '.Junk'          => 'spam',
+            '.Spam'          => 'spam',
+            'Junk'           => 'spam',
+            'Spam'           => 'spam',
+        ];
+
         $synced = 0;
 
-        foreach ($subdirs as $sub) {
-            $dirPath = "{$maildirBase}/{$sub}";
-            if (!is_dir($dirPath)) continue;
+        foreach ($folderMaps as $folderSuffix => $targetFolder) {
+            $folderBase = $folderSuffix !== '' ? "{$maildirBase}/{$folderSuffix}" : $maildirBase;
+            if (!is_dir($folderBase)) continue;
 
-            $files = @scandir($dirPath);
-            if (!$files) continue;
+            $subdirs = ['new', 'cur'];
 
-            foreach ($files as $file) {
-                if ($file === '.' || $file === '..' || str_starts_with($file, '.')) continue;
+            foreach ($subdirs as $sub) {
+                $dirPath = "{$folderBase}/{$sub}";
+                if (!is_dir($dirPath)) continue;
 
-                $fullFile = "{$dirPath}/{$file}";
-                if (!is_file($fullFile) || !is_readable($fullFile)) continue;
+                $files = @scandir($dirPath);
+                if (!$files) continue;
 
-                // Gunakan hash nama file unik sebagai identitas
-                $fileKey = md5("{$user->id}_{$file}");
-                $existingRecord = MailboxEmail::where('virtual_user_id', $user->id)
-                    ->where('body', 'like', "%[UID:{$fileKey}]%")
-                    ->first();
+                foreach ($files as $file) {
+                    if ($file === '.' || $file === '..' || str_starts_with($file, '.')) continue;
 
-                $rawContent = @file_get_contents($fullFile);
-                if (!$rawContent) continue;
+                    $fullFile = "{$dirPath}/{$file}";
+                    if (!is_file($fullFile) || !is_readable($fullFile)) continue;
 
-                $parsed = $this->parseRawRfc822Email($rawContent);
+                    // Gunakan hash nama file unik sebagai identitas
+                    $fileKey = md5("{$user->id}_{$folderSuffix}_{$file}");
+                    $existingRecord = MailboxEmail::where('virtual_user_id', $user->id)
+                        ->where('body', 'like', "%[UID:{$fileKey}]%")
+                        ->first();
 
-                if ($existingRecord) {
-                    // Jika email sudah pernah disimpan tetapi masih memuat teks boundary berantakan atau from_email unknown, perbarui sekarang
-                    if (str_contains($existingRecord->body, 'Content-Type: text/') || str_starts_with($existingRecord->from_email ?? '', 'unknown@') || empty($existingRecord->from_email)) {
-                        $existingRecord->update([
-                            'from_name' => $parsed['from_name'] ?: $existingRecord->from_name,
-                            'from_email' => $parsed['from_email'] ?: $existingRecord->from_email,
-                            'subject' => $parsed['subject'] ?: $existingRecord->subject,
+                    $rawContent = @file_get_contents($fullFile);
+                    if (!$rawContent) continue;
+
+                    $parsed = $this->parseRawRfc822Email($rawContent);
+
+                    if ($existingRecord) {
+                        // Jika email sudah pernah disimpan tetapi masih memuat teks boundary berantakan atau from_email unknown, perbarui sekarang
+                        if (str_contains($existingRecord->body, 'Content-Type: text/') || str_starts_with($existingRecord->from_email ?? '', 'unknown@') || empty($existingRecord->from_email)) {
+                            $existingRecord->update([
+                                'from_name' => $parsed['from_name'] ?: $existingRecord->from_name,
+                                'from_email' => $parsed['from_email'] ?: $existingRecord->from_email,
+                                'to' => $parsed['to'] ?: $existingRecord->to,
+                                'subject' => $parsed['subject'] ?: $existingRecord->subject,
+                                'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
+                            ]);
+                        }
+                        continue;
+                    }
+
+                    try {
+                        MailboxEmail::create([
+                            'virtual_user_id' => $user->id,
+                            'folder' => $targetFolder,
+                            'from_name' => $parsed['from_name'] ?: ($targetFolder === 'sent' ? ($user->name ?: $user->email) : ''),
+                            'from_email' => $parsed['from_email'] ?: ($targetFolder === 'sent' ? $user->email : ''),
+                            'to' => $parsed['to'] ?: ($targetFolder === 'sent' ? '' : $user->email),
+                            'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
+                            'date_human' => $parsed['date'] ?: now()->format('d M, H:i'),
+                            'is_read' => ($sub === 'cur' || $targetFolder === 'sent'),
+                            'is_starred' => false,
                             'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
+                            'attachments' => $parsed['attachments'],
                         ]);
+
+                        // Otomatis simpan kontak
+                        if (!empty($parsed['from_email']) && !str_starts_with($parsed['from_email'], 'unknown@')) {
+                            MailboxContact::recordCommunication($user->id, $parsed['from_email'], $parsed['from_name']);
+                        }
+                        if ($targetFolder === 'sent' && !empty($parsed['to']) && !str_starts_with($parsed['to'], 'unknown@')) {
+                            MailboxContact::recordCommunication($user->id, $parsed['to'], null);
+                        }
+
+                        $synced++;
+                    } catch (\Throwable $e) {
+                        // Lanjutkan jika satu berkas email memiliki encoding atau karakter invalid
                     }
-                    continue;
-                }
-
-                try {
-                    MailboxEmail::create([
-                        'virtual_user_id' => $user->id,
-                        'folder' => 'inbox',
-                        'from_name' => $parsed['from_name'] ?: '',
-                        'from_email' => $parsed['from_email'] ?: '',
-                        'to' => $user->email,
-                        'subject' => $parsed['subject'] ?: '(Tanpa Subjek)',
-                        'date_human' => $parsed['date'] ?: now()->format('d M, H:i'),
-                        'is_read' => ($sub === 'cur'),
-                        'is_starred' => false,
-                        'body' => $parsed['body'] . "\n\n<!-- [UID:{$fileKey}] -->",
-                        'attachments' => $parsed['attachments'],
-                    ]);
-
-                    // Otomatis simpan pengirim ke kontak
-                    if (!empty($parsed['from_email']) && !str_starts_with($parsed['from_email'], 'unknown@')) {
-                        MailboxContact::recordCommunication($user->id, $parsed['from_email'], $parsed['from_name']);
-                    }
-
-                    $synced++;
-                } catch (\Throwable $e) {
-                    // Lanjutkan jika satu berkas email memiliki encoding atau karakter invalid
                 }
             }
         }
@@ -1780,17 +1806,22 @@ new class extends Component
         $html = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $html);
         $html = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $html);
 
-        // 2.5 Hapus duplikasi blok disclaimer atau paragraf identik berurutan akibat penggabungan multipart
-        $html = preg_replace('/(\b[^\r\n<>]{40,}\b)(?:\s*(?:<[^>]+>|\r?\n|\s)+\1)+/is', '$1', $html);
+        // 2.5 Hapus duplikasi blok disclaimer dengan aman (mencegah PCRE backtrack limit)
+        $dedup = @preg_replace('/(\b[^\r\n<>]{40,}\b)(?:\s*(?:<[^>]+>|\r?\n|\s)+\1)+/is', '$1', $html);
+        if ($dedup !== null && !empty($dedup)) {
+            $html = $dedup;
+        }
 
         // Jika murni teks biasa tanpa tag HTML, delegasikan ke formatter teks
         if (!preg_match('/<(?:html|body|div|p|table|tbody|tr|td|span|img|h[1-6]|ul|ol|li)\b/i', $html)) {
             return $this->formatPlainTextEmailBody($html);
         }
 
-        // 3. Ekstrak konten dalam <body> jika ada tag <body>
+        // 3. Ekstrak konten dalam <body> jika ada tag <body> lengkap
         if (preg_match('/<body[^>]*>(.*?)<\/body>/is', $html, $matches)) {
-            $html = $matches[1];
+            if (!empty(trim($matches[1]))) {
+                $html = $matches[1];
+            }
         }
 
         // 4. Hapus komentar Office/Word <!--[if ...]><![endif]--> dan tag XML
@@ -1801,14 +1832,18 @@ new class extends Component
         $html = preg_replace('/<\/?m:[a-z0-9_-]+[^>]*>/is', '', $html);
         $html = preg_replace('/<\/?v:[a-z0-9_-]+[^>]*>/is', '', $html);
 
-        // 5. Hapus script berbahaya, style tags (mencegah CSS bocor ke halaman utama), link eksternal, dan meta
+        // 5. Hapus script berbahaya, link eksternal, dan meta (tetap izinkan style karena di-render di dalam sandbox iframe terisolasi)
         $html = preg_replace('#<script\b[^>]*>(.*?)<\/script>#is', '', $html);
-        $html = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', '', $html);
         $html = preg_replace('#<link\b[^>]*>#is', '', $html);
         $html = preg_replace('#<meta\b[^>]*>#is', '', $html);
 
         // 6. Sanitasi atribut event JavaScript on* (onclick, onload, onerror, dll)
         $html = preg_replace('#\son[a-zA-Z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#is', '', $html);
+
+        // Fallback jika pembersihan menghasilkan string kosong, kembalikan teks asli
+        if (empty(trim($html))) {
+            return $rawHtml;
+        }
 
         // 7. Amankan tautan agar membuka di tab baru dan aman dari reverse tabnabbing
         $html = preg_replace_callback('/<a\b([^>]*)>/i', function ($m) {

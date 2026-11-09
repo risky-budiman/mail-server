@@ -25,8 +25,10 @@ apt-get install -y postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3
 # Install imapsync secara graceful jika tersedia di repositori sistem
 apt-get install -y imapsync 2>/dev/null || true
 
-# Pastikan www-data dapat membaca log mail sistem (/var/log/mail.log) jika Nginx terpasang
+# Pastikan www-data dapat membaca log mail sistem (/var/log/mail.log) dan berbagi akses Maildir dengan vmail
 usermod -a -G adm www-data || true
+usermod -a -G vmail www-data || true
+usermod -a -G www-data vmail || true
 
 echo "======================================================"
 echo " 2. Konfigurasi Hostname Server"
@@ -133,13 +135,38 @@ service auth {
 }
 EOF
 
-# Konfigurasi Mailbox Storage Dovecot
+# Konfigurasi Mailbox Storage Dovecot & Namespace Inbox
 cat << 'EOF' > /etc/dovecot/conf.d/10-mail.conf
 mail_location = maildir:/var/vmail/%d/%n
 mail_uid = 5000
 mail_gid = 5000
 first_valid_uid = 5000
 last_valid_uid = 5000
+
+namespace inbox {
+  inbox = yes
+  separator = /
+
+  mailbox Drafts {
+    special_use = \Drafts
+    auto = subscribe
+  }
+  mailbox Junk {
+    special_use = \Junk
+    auto = subscribe
+  }
+  mailbox Trash {
+    special_use = \Trash
+    auto = subscribe
+  }
+  mailbox Sent {
+    special_use = \Sent
+    auto = subscribe
+  }
+  mailbox "Sent Messages" {
+    special_use = \Sent
+  }
+}
 EOF
 
 echo "======================================================"
