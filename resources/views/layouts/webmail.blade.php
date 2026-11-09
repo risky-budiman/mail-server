@@ -57,6 +57,21 @@
 
         .email-rendered-content {
             width: 100%;
+            overflow-x: auto;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .email-rendered-content img {
+            max-width: 100% !important;
+            height: auto !important;
+            display: inline-block;
+        }
+        .email-rendered-content table {
+            max-width: 100% !important;
+        }
+        .email-rendered-content pre, .email-rendered-content code {
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         .email-rendered-content p {
             margin-bottom: 0.75rem;

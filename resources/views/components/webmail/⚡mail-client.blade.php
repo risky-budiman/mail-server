@@ -1824,6 +1824,9 @@ new class extends Component
             }
         }
 
+        // Hapus tag pembuka dan penutup html, head, dan body jika tersisa
+        $html = preg_replace('#<\/?(?:html|head|body)[^>]*>#is', '', $html);
+
         // 4. Hapus komentar Office/Word <!--[if ...]><![endif]--> dan tag XML
         $html = preg_replace('/<!--\[if\s+gte\s+mso[\s\S]*?<!\[endif\]-->/is', '', $html);
         $html = preg_replace('/<xml[\s\S]*?<\/xml>/is', '', $html);
@@ -1832,8 +1835,9 @@ new class extends Component
         $html = preg_replace('/<\/?m:[a-z0-9_-]+[^>]*>/is', '', $html);
         $html = preg_replace('/<\/?v:[a-z0-9_-]+[^>]*>/is', '', $html);
 
-        // 5. Hapus script berbahaya, link eksternal, dan meta (tetap izinkan style karena di-render di dalam sandbox iframe terisolasi)
+        // 5. Hapus script berbahaya, style tags (mencegah CSS global bocor), link eksternal, dan meta
         $html = preg_replace('#<script\b[^>]*>(.*?)<\/script>#is', '', $html);
+        $html = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', '', $html);
         $html = preg_replace('#<link\b[^>]*>#is', '', $html);
         $html = preg_replace('#<meta\b[^>]*>#is', '', $html);
 
@@ -3276,47 +3280,12 @@ new class extends Component
                         <div :class="readingMode === 'paper' ? 'email-paper-canvas' : 'email-dark-canvas'" 
                              class="transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
                             @if ($isRichHtml)
-                                {{-- Email HTML di-render dalam iframe sandbox agar CSS email tidak bocor ke halaman --}}
                                 @php
                                     $cleanedHtml = $this->cleanEmailHtml($selectedEmail['body']);
                                 @endphp
-                                <div class="email-rendered-content overflow-x-auto"
-                                     wire:key="email-iframe-wrapper-{{ $selectedEmail['id'] }}"
-                                     x-data="{
-                                        hasLoaded: false,
-                                        renderEmailIframe(mode) {
-                                            const iframe = this.$refs.emailIframe;
-                                            const rawEl = this.$refs.emailRaw;
-                                            if (!iframe || !rawEl) return;
-                                            const emailContent = rawEl.value || '';
-                                            const dark = mode === 'dark';
-                                            const bg = dark ? '#0b132b' : '#ffffff';
-                                            const fg = dark ? '#e2e8f0' : '#1e293b';
-                                            const lk = dark ? '#38bdf8' : '#2563eb';
-                                            iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content=width=device-width,initial-scale=1><style>html,body{margin:0;padding:12px;background:'+bg+';color:'+fg+';font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:0.95rem;line-height:1.6;word-wrap:break-word;overflow-wrap:break-word}a{color:'+lk+';text-decoration:underline}img{max-width:100%!important;height:auto!important;display:inline-block}table{max-width:100%!important}pre,code{white-space:pre-wrap;word-wrap:break-word}</style></head><body>'+emailContent+'</body></html>';
-                                            const adjustHeight = () => {
-                                                try {
-                                                    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-                                                    if (doc && (doc.documentElement || doc.body)) {
-                                                        const h = Math.max(doc.documentElement?.scrollHeight || 0, doc.body?.scrollHeight || 0);
-                                                        if (h > 0) iframe.style.height = (h + 30) + 'px';
-                                                    }
-                                                } catch(e) {}
-                                            };
-                                            iframe.onload = () => {
-                                                adjustHeight();
-                                                setTimeout(adjustHeight, 350);
-                                                setTimeout(adjustHeight, 1000);
-                                            };
-                                            this.hasLoaded = true;
-                                        }
-                                     }"
-                                     x-init="$nextTick(() => renderEmailIframe(readingMode)); $watch('readingMode', (val) => renderEmailIframe(val))">
-                                    <textarea x-ref="emailRaw" class="hidden" style="display:none;">{!! htmlspecialchars($cleanedHtml, ENT_QUOTES, 'UTF-8') !!}</textarea>
-                                    <iframe x-ref="emailIframe"
-                                            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                                            style="width: 100%; min-height: 280px; border: none; display: block;"
-                                            title="Email Content"></iframe>
+                                <div class="email-rendered-content overflow-x-auto leading-relaxed max-w-full"
+                                     wire:key="email-body-content-{{ $selectedEmail['id'] }}">
+                                    {!! $cleanedHtml !!}
                                 </div>
                             @else
                                 {{-- Email Berformat Plain Text Rapi dengan Autolink & Quotes --}}
