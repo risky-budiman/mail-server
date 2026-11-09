@@ -1913,8 +1913,9 @@ new class extends Component
         $clean = preg_replace('/(\b[^\r\n]{40,}\b)(?:\s*[\r\n]+\s*\1)+/is', '$1', $clean);
 
         // 2.6 Ubah tag line-break HTML (<br>, <br/>, <br />) menjadi baris baru sejati agar tidak bocor sebagai teks biasa
-        $clean = preg_replace('/<br\s*\/?>/i', "\n", $clean);
-        $clean = preg_replace("/\n{3,}/", "\n\n", $clean);
+        $clean = str_ireplace(['<br />', '<br/>', '<br>'], "\n", $clean);
+        $clean = preg_replace('#<br\b[^>]*>#i', "\n", $clean);
+        $clean = preg_replace('#\n{3,}#', "\n\n", $clean);
 
         $lines = explode("\n", str_replace("\r\n", "\n", trim($clean)));
         $formattedLines = [];
