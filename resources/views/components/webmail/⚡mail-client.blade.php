@@ -1801,6 +1801,15 @@ new class extends Component
         }
         $html = preg_replace('/=[ \t]*\r?\n/', '', $html);
 
+        // Decode rangkaian multi-byte UTF-8 Quoted-Printable (misal emoji =F0=9F=93=A5, simbol =E2=80=99, dll)
+        $html = preg_replace_callback('/(?:=[89A-F][0-9A-F]){2,}/i', function ($m) {
+            return quoted_printable_decode($m[0]);
+        }, $html);
+
+        // Bersihkan =20 (spasi QP) yang berdiri sendiri sebagai baris kosong atau spasi
+        $html = preg_replace('/(?<=\n|\r|^|>)\s*=20\s*(?=\n|\r|$|<)/', '', $html);
+        $html = str_ireplace(['=20', '=09'], [' ', "\t"], $html);
+
         // 2. Hapus komentar UID internal dan boundary yang bocor
         $html = preg_replace('/<!--\s*\[UID:[^\]]+\]\s*-->/i', '', $html);
         $html = preg_replace('/--[a-zA-Z0-9_\-\.\/=]{15,}--?/s', '', $html);
@@ -1890,6 +1899,15 @@ new class extends Component
             $clean = str_ireplace('=3D', '=', $clean);
         }
         $clean = preg_replace('/=[ \t]*\r?\n/', '', $clean);
+
+        // Decode rangkaian multi-byte UTF-8 Quoted-Printable (misal emoji =F0=9F=93=A5)
+        $clean = preg_replace_callback('/(?:=[89A-F][0-9A-F]){2,}/i', function ($m) {
+            return quoted_printable_decode($m[0]);
+        }, $clean);
+
+        // Bersihkan =20 (spasi QP) yang berdiri sendiri sebagai baris kosong atau spasi
+        $clean = preg_replace('/(?<=\n|\r|^)\s*=20\s*(?=\n|\r|$)/', '', $clean);
+        $clean = str_ireplace(['=20', '=09'], [' ', "\t"], $clean);
 
         // 2.5 Hapus duplikasi blok disclaimer atau paragraf identik berurutan
         $clean = preg_replace('/(\b[^\r\n]{40,}\b)(?:\s*[\r\n]+\s*\1)+/is', '$1', $clean);
@@ -1987,6 +2005,12 @@ new class extends Component
             $clean = str_ireplace('=3D', '=', $clean);
         }
         $clean = preg_replace('/=[ \t]*\r?\n/', '', $clean);
+
+        // Decode multi-byte UTF-8 Quoted-Printable (misal emoji =F0=9F=93=A5)
+        $clean = preg_replace_callback('/(?:=[89A-F][0-9A-F]){2,}/i', function ($m) {
+            return quoted_printable_decode($m[0]);
+        }, $clean);
+        $clean = str_ireplace(['=20', '=09'], [' ', "\t"], $clean);
 
         // 2. Bersihkan blok <style>...</style> lengkap maupun terpotong (jika string terpotong)
         $clean = preg_replace('#<style\b[^>]*>(.*?)<\/style>#is', ' ', $clean);
